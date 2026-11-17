@@ -1,0 +1,279 @@
+"""Build dist/Askmargin_NLP_Project_Report.pdf.
+
+Usage (from the report/ folder):  python scripts/build.py
+Needs:  pip install markdown-it-py pygments playwright pymupdf  &&  playwright install chromium
+Inputs: config.json (your details), data/executed.ipynb + data/figures (copied from the executed
+        notebook), src/chapters/*.md (text), screens/*.png (website screenshots, optional).
+"""
+import base64, html, json, re, sys
+from pathlib import Path
+from markdown_it import MarkdownIt
+from pygments import highlight
+from pygments.lexers import PythonLexer
+from pygments.formatters import HtmlFormatter
+import fitz
+from playwright.sync_api import sync_playwright
+
+ROOT = Path(__file__).resolve().parent.parent
+SRC, DATA, SCREENS, DIST = ROOT / "src", ROOT / "data", ROOT / "screens", ROOT / "dist"
+DIST.mkdir(exist_ok=True)
+CFG = json.loads((ROOT / "config.json").read_text(encoding="utf8"))
+NB = json.loads((DATA / "executed.ipynb").read_text(encoding="utf8"))
+CELLS = NB["cells"]
+FINAL = DIST / "Askmargin_NLP_Project_Report.pdf"
+md = MarkdownIt("commonmark", {"html": True}).enable("table")
+FMT = HtmlFormatter(nowrap=True)
+HEADS = []
+FLOW = {"2", "3", "5", "6"}   # chapters that continue on the same page (saves paper)
+
+
+def b64(path):
+    return "data:image/png;base64," + base64.b64encode(Path(path).read_bytes()).decode()
+
+
+def src_of(i):
+    return "".join(CELLS[i]["source"]).rstrip("\n")
+
+
+def exec_count(i):
+    return CELLS[i].get("execution_count")
+
+
+def code_block(i, title=None):
+    code = highlight(src_of(i), PythonLexer(), FMT)
+    return (f'<div class="codecell"><div class="cellhead"><span>{html.escape(title or "Code cell")}</span>'
+            f'<span>In [{exec_count(i)}]</span></div><pre class="hl">{code}</pre></div>')
+
+
+def strip_ansi(t):
+    return re.sub(r"\x1b\[[0-9;]*m", "", t)
+
+
+def out_panel(i, title=None, skip_images=False, maxlines=None):
+    parts = []
+    for o in CELLS[i].get("outputs", []):
+        t = o["output_type"]
+        if t == "stream":
+            if o.get("name") == "stderr":
+                continue  # warnings / progress bars are not part of the result
+            txt = strip_ansi("".join(o["text"]))
+            if maxlines:
+                L = txt.split("\n")
+                txt = "\n".join(L[:maxlines]) + ("\n..." if len(L) > maxlines else "")
+            parts.append(f"<pre>{html.escape(txt.rstrip())}</pre>")
+        elif t in ("display_data", "execute_result"):
+            d = o["data"]
+            if "text/html" in d:
+                h = "".join(d["text/html"])
+                h = re.sub(r"<style.*?</style>", "", h, flags=re.S)
+                parts.append(h)
+            elif "image/png" in d:
+                if not skip_images:
+                    parts.append(f'<img src="data:image/png;base64,{d["image/png"].strip()}">')
+            elif "text/plain" in d:
+                parts.append(f"<pre>{html.escape(''.join(d['text/plain']))}</pre>")
+        elif t == "error":
+            parts.append(f'<pre class="stderr">{html.escape(strip_ansi(o["ename"] + ": " + o["evalue"]))}</pre>')
+    if not parts:
+        return ""
+    return (f'<div class="shot"><div class="bar"><b>{html.escape(title or "Output")}</b>'
+            f'<span>Out of cell [{exec_count(i)}] - askmargin_rag.ipynb</span></div><div class="body">{"".join(parts)}</div></div>')
+
+
+def figure(name, cap, width="86%"):
+    p = DATA / "figures" / name
+    return f'<figure><img src="{b64(p)}" style="width:{width}"><div class="fcap">{cap}</div></figure>'
+
+
+EXPECTED_SHOTS = [("02-answer.png", "A grounded answer: best sentences, page citations and the stage-by-stage trace"),
+                  ("04-refusal.png", "Refusal: best cosine 0.18 is below the 0.24 threshold, so nothing is shown"),
+]
+
+
+def site_gallery():
+    cells = []
+    for n, c in EXPECTED_SHOTS:
+        p = SCREENS / n
+        cls = ' class="wide"' if n.startswith("01") else ""
+        if p.exists():
+            cells.append(f'<figure{cls}><img src="{b64(p)}"><div class="fcap">{html.escape(c)}</div></figure>')
+        else:
+            cells.append(f'<figure{cls}><div class="ph-shot">PLACEHOLDER<br>report/screens/{n}<br>{html.escape(c)}</div><div class="fcap">{html.escape(c)}</div></figure>')
+    return '<div class="site">' + "".join(cells) + "</div>"
+
+
+def v(k):
+    t = html.escape(CFG[k])
+    return f'<span class="ph">{t}</span>' if t.startswith("[") else t
+
+
+def cover():
+    return f'''<section class="cover">
+<div><div class="inst">{v("institute")}</div><div class="sub">Academic Year {v("academic_year")}</div></div>
+<div><div class="logo">Ask<span>margin</span></div>
+<div class="tag">RAG Document Q&amp;A Assistant</div>
+<div class="sub" style="margin-top:14pt">Mini-project report: a complete NLP pipeline for question answering<br>with page citations over PDF documents</div>
+<div class="course">Natural Language Processing</div></div>
+<table class="meta">
+<tr><td>Submitted by</td><td>{v("student_name")}</td></tr>
+<tr><td>Enrolment No.</td><td>{v("enrolment_no")}</td></tr>
+<tr><td>Course</td><td>{v("course")}</td></tr>
+<tr><td>Section</td><td>{v("section")}</td></tr>
+<tr><td>Semester</td><td>{v("semester")}</td></tr>
+<tr><td>Submitted to</td><td>{v("submitted_to")}</td></tr>
+<tr><td>Date</td><td>{v("submission_date")}</td></tr>
+</table>
+<div class="url">Live demo: {html.escape(CFG["live_demo_url"])}</div>
+</section>'''
+
+
+def declaration():
+    return f'''<section class="front"><h2>Declaration</h2>
+<p>I, {v("student_name")} (Enrolment No. {v("enrolment_no")}), hereby declare that the mini-project report titled
+<b>"Askmargin: RAG Document Q&amp;A Assistant"</b>, submitted for the course Natural Language Processing, is the result of my own work.
+The pipeline described in this report (text extraction, cleaning, tokenisation, chunking, TF-IDF, BM25 and dense retrieval, vector search,
+refusal logic and answer generation) was implemented by me in Python, and every number reported here was produced by running the accompanying notebook.
+Public datasets, libraries and pre-trained models that I used are credited in the References section.</p>
+<div class="sig"><div>Date: {v("submission_date")}</div><div style="text-align:center">{v("student_name")}<br>{v("enrolment_no")}</div></div>
+<h2 style="margin-top:34pt">Acknowledgement</h2>
+<p>I would like to thank {v("submitted_to")} for guidance during the course and for the freedom to choose a real-world
+problem for this project. I am also grateful to {v("institute")} for the facilities provided, and to the authors of the open-source tools and open-access papers
+(PyMuPDF, NLTK, scikit-learn, rank-bm25, Sentence-Transformers, FAISS, Hugging Face Transformers, and the arXiv papers used as the
+document corpus) whose work made it possible to build and test this system without any paid service.</p>
+<div class="sig"><div></div><div style="text-align:center">{v("student_name")}</div></div></section>'''
+
+
+def render_body():
+    text = "\n\n".join(f.read_text(encoding="utf8") for f in sorted((SRC / "chapters").glob("*.md")))
+    h = md.render(text)
+
+    def tok(m):
+        kind = m.group(1)
+        a = [x.strip() for x in html.unescape(m.group(2)).split("|")]
+        if kind == "CODE":
+            return code_block(int(a[0]), a[1] if len(a) > 1 else None)
+        if kind == "OUT":
+            opts = dict(x.split("=") for x in a[2:])
+            return out_panel(int(a[0]), a[1] if len(a) > 1 and a[1] else None,
+                             skip_images=opts.get("img") == "0", maxlines=int(opts["max"]) if "max" in opts else None)
+        if kind == "FIG":
+            return figure(a[0], a[1], a[2] if len(a) > 2 else "86%")
+        if kind == "DIAGRAM":
+            return f'<div class="diagram">{(SRC / "diagram.svg").read_text(encoding="utf8")}</div>'
+        if kind == "SITE":
+            return site_gallery()
+        if kind == "CAP":
+            return f'<div class="{a[0]}">{a[1]}</div>'
+        raise ValueError(kind)
+
+    h = re.sub(r"<p>\{\{(\w+):(.*?)\}\}</p>", tok, h, flags=re.S)
+    h = re.sub(r"<h1>Chapter (\d+) \| (.*?)</h1>",
+               lambda m: f'<h1{" class=flow" if m.group(1) in FLOW else ""}><span class="chno">Chapter {m.group(1)}</span>{m.group(2)}</h1>', h)
+    return h
+
+
+def collect_heads(body):
+    HEADS.clear()
+
+    def h1(m):
+        label = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", m.group(1))).strip()
+        label = re.sub(r"^(Chapter \d+)\s", r"\1: ", label)
+        tid = f"h{len(HEADS)}"
+        HEADS.append((1, tid, label))
+        return f'<h1 id="{tid}"{" class=flow" if "class=flow" in m.group(0)[:20] else ""}>{m.group(1)}</h1>'
+
+    body = re.sub(r"<h1[^>]*>(.*?)</h1>", lambda m: h1(m), body, flags=re.S)
+
+    def h2(m):
+        tid = f"h{len(HEADS)}"
+        HEADS.append((2, tid, html.unescape(re.sub(r"<[^>]+>", "", m.group(1)))))
+        return f'<h2 id="{tid}">{m.group(1)}</h2>'
+
+    body = re.sub(r"<h2>(\d+\.\d+ .*?)</h2>", h2, body)
+    # order headings: chapter by chapter, h1 first (needed for the contents page)
+    def key(e):
+        m = re.match(r"(?:Chapter )?(\d+)", e[2])
+        return (int(m.group(1)) if m else 99, e[0], int(e[1][1:]))
+    HEADS.sort(key=key)
+    return body
+
+
+def toc_html(pages):
+    out = ['<section class="front toc-sec"><h2>Contents</h2><div class="toc">']
+    for lvl, tid, label in HEADS:
+        out.append(f'<div class="l c{lvl}"><span class="t">{html.escape(label)}</span><span class="d"></span><span>{pages.get(tid, "")}</span></div>')
+    out.append("</div></section>")
+    return "".join(out)
+
+
+def build_pdf(pages):
+    body = collect_heads(render_body())
+    css = (SRC / "report.css").read_text(encoding="utf8")
+    doc = (f"<!doctype html><html><head><meta charset='utf-8'><title>Askmargin NLP Project Report</title>"
+           f"<style>{css}</style></head><body>{cover()}{declaration()}{toc_html(pages)}{body}</body></html>")
+    (DIST / "report.html").write_text(doc, encoding="utf8")
+    raw = DIST / "_raw.pdf"
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        pg = b.new_page()
+        pg.goto((DIST / "report.html").as_uri())
+        pg.wait_for_load_state("networkidle")
+        pg.pdf(path=str(raw), format="A4", print_background=True, prefer_css_page_size=True)
+        b.close()
+    return raw
+
+
+def find_pages(raw):
+    d = fitz.open(raw)
+    texts = [re.sub(r"\s+", " ", d[i].get_text()) for i in range(len(d))]
+    res, start, chap = {}, 2, {}
+    for lvl, tid, label in HEADS:
+        needle = re.sub(r"^Chapter \d+: ", "", label)
+        mm = re.match(r"(?:Chapter )?(\d+)", label)
+        if lvl == 2 and mm and int(mm.group(1)) in chap:
+            start = chap[int(mm.group(1))]
+        for i in range(start, len(d)):
+            if needle in texts[i]:
+                res[tid] = i + 1
+                start = i
+                if lvl == 1 and mm: chap[int(mm.group(1))] = i
+                break
+    d.close()
+    return res
+
+
+def stamp(raw):
+    d = fitz.open(raw)
+    for i, page in enumerate(d):
+        if i == 0:
+            continue
+        r = page.rect
+        page.draw_line((54, r.height - 52), (r.width - 54, r.height - 52), color=(.8, .8, .8), width=.5)
+        page.insert_text((54, r.height - 40), "Askmargin: RAG Document Q&A Assistant  |  NLP Mini-Project", fontsize=8, fontname="helv", color=(.35, .35, .35))
+        t = f"Page {i + 1}"
+        w = fitz.get_text_length(t, fontname="helv", fontsize=8.5)
+        page.insert_text((r.width - 54 - w, r.height - 40), t, fontsize=8.5, fontname="helv", color=(.1, .1, .1))
+    d.set_metadata({"title": "Askmargin: RAG Document Q&A Assistant - NLP Project Report",
+                    "author": CFG["student_name"], "subject": "Natural Language Processing"})
+    d.save(FINAL, garbage=3, deflate=True)
+    n = len(d)
+    d.close()
+    return n
+
+
+if __name__ == "__main__":
+    pages = find_pages(build_pdf({}))
+    for _ in range(2):
+        raw = build_pdf(pages)
+        new = find_pages(raw)
+        if new == pages:
+            break
+        pages = new
+    n = stamp(raw)
+    miss = [l for _, t, l in HEADS if t not in pages]
+    print(f"{FINAL}  pages={n}")
+    if miss:
+        print("WARNING: headings not located:", miss)
+    if n > 19:
+        print("ERROR: more than 19 pages!")
+        sys.exit(2)

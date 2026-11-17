@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>How Askmargin works</title>
+<style>
+@page{size:A4;margin:28pt 32pt}*{box-sizing:border-box}
+html{font-family:Arial,Helvetica,sans-serif;font-size:9pt;color:#1f2328}body{margin:0}
+h1{font-size:20pt;margin:0 0 2pt;color:#9a3412}
+h2{font-size:10.5pt;margin:9pt 0 3pt;padding-bottom:2pt;border-bottom:1pt solid #d9a58a;color:#9a3412;break-after:avoid}
+p{margin:0 0 4pt;line-height:1.3}ul{padding-left:12pt;margin:2pt 0 4pt}li{line-height:1.3;margin-bottom:2pt}
+.sub{font-size:9.5pt;color:#555;margin-bottom:6pt}
+.pitch{padding:6pt 9pt;background:#fdf1ea;border-left:3pt solid #9a3412;margin-bottom:4pt}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16pt}.col{min-width:0}
+.pipe{display:grid;grid-template-columns:repeat(6,1fr);gap:9pt;margin:6pt 0 4pt}
+.step{border:1pt solid #c2410c;border-radius:4pt;padding:4pt 4pt 5pt;background:#fff;position:relative;font-size:7.6pt;line-height:1.25}
+.step b{display:block;color:#9a3412;font-size:8.2pt;margin-bottom:1pt}
+.step .n{display:inline-block;background:#c2410c;color:#fff;border-radius:50%;width:11pt;height:11pt;text-align:center;font-size:7pt;line-height:11pt;margin-right:3pt}
+.step:not(:last-child):after{content:"\25B6";position:absolute;right:-8.5pt;top:50%;margin-top:-5pt;color:#c2410c;font-size:7pt}
+.ex{background:#f6f7f8;border:0.5pt solid #c9ced3;border-radius:4pt;padding:5pt 8pt;margin:4pt 0}
+.ex .row{display:flex;gap:6pt;margin-bottom:3pt;line-height:1.3}.ex .lab{flex:0 0 62pt;font-weight:700;color:#9a3412}
+code{font-family:Consolas,monospace;font-size:8pt}
+table{border-collapse:collapse;width:100%;font-size:8.4pt;margin:3pt 0}
+td,th{border:0.5pt solid #b9c0c6;padding:3pt 4pt;text-align:left;vertical-align:top;line-height:1.25}th{background:#fdf1ea}
+.note{background:#fff8e6;border-left:3pt solid #d4a017;padding:4pt 8pt;margin:4pt 0}
+.sheet{break-after:page}.sheet:last-child{break-after:auto}
+.foot{font-size:8pt;color:#777;margin-top:6pt}
+.no-break{break-inside:avoid}
+</style></head><body>
+
+<section class="sheet">
+<h1>How Askmargin works</h1>
+<p class="sub">A plain-language explainer for a 5-minute read. NLP mini-project: a question-answering assistant for PDF documents.</p>
+
+<div class="pitch"><b>In one sentence:</b> you ask a question about a document, Askmargin finds the few passages most likely to contain the answer, answers from those passages only, and tells you which page it came from. If nothing relevant is found, it says so instead of guessing.</div>
+
+<h2>The problem it addresses</h2>
+<p>A language model that answers from memory can state false things with confidence (a <b>hallucination</b>), and it knows nothing about your private documents. Askmargin uses <b>Retrieval-Augmented Generation (RAG)</b>: first <i>retrieve</i> evidence from the document, then <i>generate</i> an answer restricted to that evidence. The answer can then be checked against a page number.</p>
+
+<h2>The pipeline in six steps</h2>
+<div class="pipe">
+<div class="step"><b><span class="n">1</span>Read</b>Extract the PDF text page by page; fix broken hyphens and odd characters. Keep the page number.</div>
+<div class="step"><b><span class="n">2</span>Split</b>Cut each page into chunks of about 500 characters, at sentence ends, with one sentence of overlap.</div>
+<div class="step"><b><span class="n">3</span>Embed</b>Turn each chunk into a list of 384 numbers (a vector) with the MiniLM model.</div>
+<div class="step"><b><span class="n">4</span>Search</b>Turn the question into a vector too. Rank chunks by cosine similarity.</div>
+<div class="step"><b><span class="n">5</span>Answer</b>Put the top 3 chunks in a prompt for FLAN-T5. Page citation comes from chunk metadata.</div>
+<div class="step"><b><span class="n">6</span>Refuse</b>If the best similarity is below a threshold, answer "not found in the documents".</div>
+</div>
+<p style="font-size:8.2pt;color:#555">Steps 1 to 3 happen once per document. Steps 4 to 6 happen for every question.</p>
+
+<div class="cols">
+<div class="col">
+<h2>Why numbers? Embeddings in one paragraph</h2>
+<p>Computers cannot compare meaning directly, so the embedding model converts text into a point in a 384-dimensional space, trained so that sentences with similar meaning land close together. "How many attention heads?" and a sentence about "multi-head attention" end up near each other even if they share few exact words. Closeness is measured by <b>cosine similarity</b>: the angle between two vectors. 1.0 means pointing the same way (very similar), values near 0 mean unrelated.</p>
+<p>Two older, word-counting methods are used as baselines for comparison: <b>TF-IDF</b> and <b>BM25</b> score a chunk by how many of the question's words it contains, weighting rare words more. They do not understand synonyms, which is the gap embeddings are meant to fill.</p>
+<p><b>Search</b> is done two ways that give the same answer: a NumPy matrix multiply (to show the maths) and FAISS, a library built for fast vector search.</p>
+</div>
+<div class="col">
+<h2>Glossary</h2>
+<table>
+<tr><th style="width:27%">Term</th><th>Meaning here</th></tr>
+<tr><td><b>Chunk</b></td><td>A short passage (about 500 characters) cut from a page; the unit that is searched.</td></tr>
+<tr><td><b>Embedding</b></td><td>A vector of 384 numbers that represents a chunk's or question's meaning.</td></tr>
+<tr><td><b>Cosine similarity</b></td><td>Score for how closely two vectors point the same way; higher means more similar in meaning.</td></tr>
+<tr><td><b>RAG</b></td><td>Look up evidence first, then write the answer from that evidence only.</td></tr>
+<tr><td><b>Hallucination</b></td><td>A fluent answer that is not supported by the source.</td></tr>
+<tr><td><b>Threshold</b></td><td>The minimum similarity needed before the system will answer at all.</td></tr>
+</table>
+</div></div>
+
+<h2>A worked example (real values)</h2>
+<div class="ex no-break">
+<div class="row"><span class="lab">Question</span><span>"What size is the vocabulary used by BERT's tokenizer?"</span></div>
+<div class="row"><span class="lab">As a vector</span><span>384 numbers, starting <code>[0.013, -0.027, 0.039, -0.007, -0.053, ...]</code></span></div>
+<div class="row"><span class="lab">Nearest chunk</span><span>Cosine similarity <b>0.637</b>, from the BERT paper, page 4: "We use WordPiece embeddings with a <b>30,000 token vocabulary</b>."</span></div>
+<div class="row"><span class="lab">Answer</span><span><b>30,000</b> &nbsp;(source: BERT, p.4). The notebook's end-to-end run gave this answer with a correct citation. The 2nd and 3rd chunks (0.617, 0.603, both BERT p.14) only compare BERT with GPT, so the top chunk is the one that matters.</span></div>
+<div class="row"><span class="lab">Out of scope</span><span>"What is the capital city of France?" scored at best <b>0.179</b> (against the Transformer paper). That is below the refusal threshold of 0.24, so the system answers "not found".</span></div>
+</div>
+<p style="font-size:8pt;color:#666">Retrieval values from the notebook's pipeline on the four sample papers (61 pages, 717 chunks). The FLAN-T5 answer-writing step is not shown here.</p>
+<p class="foot">Page 1 of 2</p>
+</section>
+
+<section class="sheet">
+<h1>How it was built, and how well it works</h1>
+
+<div class="cols">
+<div class="col">
+<h2>What was built</h2>
+<ul>
+<li><b>Python notebook</b> (<code>notebook/askmargin_rag.ipynb</code>): the reference implementation of all six steps, with evaluation. Libraries: PyMuPDF (PDF text), NLTK (sentences, stop-words, lemmas), scikit-learn (TF-IDF), rank-bm25, sentence-transformers (MiniLM), FAISS, Hugging Face Transformers (FLAN-T5).</li>
+<li><b>Live website</b> (<a href="https://askmargin.vercel.app">askmargin.vercel.app</a>): the same retrieval idea running <b>inside the browser</b> with transformers.js. Answers are extractive (the best-matching sentences are shown), and <b>nothing is uploaded</b>; your PDF stays on your device.</li>
+<li><b>Test data</b>: four public papers (Attention Is All You Need, BERT, RAG, Sentence-BERT) so every result can be reproduced. 30 hand-written questions: 25 answerable from a paper, 5 not in any paper (to test refusal).</li>
+</ul>
+<h2>Design choices, briefly</h2>
+<ul>
+<li><b>Sentence-aware chunks</b> instead of blind cuts, so an answer is not split in half. One sentence of overlap keeps context across boundaries.</li>
+<li><b>Citation from metadata, not from the model.</b> The page number is stored with each chunk, so it cannot be invented.</li>
+<li><b>A model that must stay in context.</b> The prompt tells FLAN-T5 to use only the supplied text, or say it does not know.</li>
+<li><b>Several retrievers compared</b> (TF-IDF, BM25, MiniLM, and a BM25+MiniLM hybrid) so the choice of embeddings is tested, not assumed.</li>
+</ul>
+</div>
+<div class="col">
+<h2>How it is evaluated</h2>
+<ul>
+<li><b>Recall@k:</b> for what share of questions does a correct chunk appear in the top k results?</li>
+<li><b>MRR:</b> average of 1 / (rank of the first correct chunk). 1.0 means the right chunk is always first.</li>
+<li><b>Answer correct:</b> the expected key phrase appears in the answer. <b>Citation correct:</b> the cited page really contains it.</li>
+<li><b>Refusal:</b> the threshold is chosen to best separate answerable from out-of-document questions by their top similarity.</li>
+<li>Extra tests: chunk-size ablation (250, 500, 800, 1200 characters) and a look at every wrong answer.</li>
+</ul>
+<h2>Results</h2>
+<p>Retrieval, sentence-aware 500-character chunks, 25 answerable questions (higher is better):</p>
+<table>
+<tr><th>Method</th><th>Recall@3</th><th>Recall@5</th><th>MRR</th></tr>
+<tr><td>TF-IDF</td><td>0.60</td><td>0.64</td><td>0.523</td></tr>
+<tr><td>BM25</td><td>0.68</td><td>0.84</td><td>0.589</td></tr>
+<tr><td>Dense (MiniLM)</td><td>0.60</td><td>0.80</td><td>0.511</td></tr>
+<tr><td><b>Hybrid (BM25 + MiniLM)</b></td><td><b>0.80</b></td><td><b>0.88</b></td><td><b>0.665</b></td></tr>
+</table>
+<p><b>Reading it:</b> MiniLM alone was not the best. BM25 beat it on all three measures, and the best result came from combining the two. Meaning-based and word-based search miss different questions. Smaller chunks (250 characters) helped MiniLM (Recall@3 0.68, MRR 0.62).</p>
+<p><b>Refusal:</b> threshold 0.24. All 5 out-of-document questions were refused; none of the 25 answerable ones were wrongly refused.</p>
+<p><b>End to end (FLAN-T5):</b> 17 of 25 answers correct (68%); the cited page was correct for 52%; faithfulness (answer words found in the retrieved text) averaged 0.95.</p>
+</div></div>
+
+<h2>One real observation from the example runs</h2>
+<p>For "How many parallel attention heads does the Transformer use?" the top two chunks (cosine 0.697 and 0.696) were about multi-head attention but did not contain the number 8, and the notebook's answer was "I don't know." Retrieval found the right topic and missed the right sentence. Citation accuracy (52%) is lower than answer accuracy (68%): some correct answers were not credited to a page that contains the answer string.</p>
+
+<h2>Honest limits</h2>
+<ul>
+<li><b>Small test set:</b> 30 questions on 4 NLP papers. Results may not carry over to scanned PDFs, tables, other languages or other subjects.</li>
+<li><b>Similarity is not truth.</b> A high score means "on the same topic", not "contains the answer". A wrong but related passage can still be retrieved.</li>
+<li><b>Fixed threshold.</b> One cut-off is tuned on this question set; a different document collection may need a different value.</li>
+<li><b>Small generator.</b> FLAN-T5-base (250 M parameters) is weak at long or multi-part answers. The website skips it and shows extracted sentences instead, so website and notebook answers will differ.</li>
+<li><b>Text PDFs only.</b> No OCR; a scanned page with no text layer yields nothing.</li>
+</ul>
+
+<h2>Try it</h2>
+<table>
+<tr><td style="width:24%"><b>Live demo</b></td><td><a href="https://askmargin.vercel.app">askmargin.vercel.app</a> (runs in your browser; nothing is uploaded)</td></tr>
+<tr><td><b>Code and notebook</b></td><td>github.com/gursimrannkaurr/askmargin (see <code>notebook/askmargin_rag.ipynb</code>)</td></tr>
+<tr><td><b>Suggested questions</b></td><td>"What size is the vocabulary used by BERT's tokenizer?" (answerable), then "What is the capital city of France?" (should be refused).</td></tr>
+</table>
+<p class="foot">Page 2 of 2</p>
+</section>
+</body></html>

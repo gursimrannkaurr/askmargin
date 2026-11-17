@@ -1,0 +1,13 @@
+pymupdf
+sentence-transformers
+faiss-cpu
+rank-bm25
+nltk
+transformers
+torch
+scikit-learn
+pandas
+numpy
+matplotlib
+requests
+jupyter

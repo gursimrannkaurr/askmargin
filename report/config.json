@@ -1,0 +1,13 @@
+{
+  "_note": "Fill these in ONCE. Everything marked [..] is a placeholder. Then run: python scripts/build.py",
+  "student_name": "[Student Name]",
+  "enrolment_no": "[Enrolment No.]",
+  "course": "[Course / Programme, e.g. B.Tech CSE]",
+  "section": "[Section]",
+  "semester": "[Semester]",
+  "submitted_to": "[Faculty Name, Designation]",
+  "institute": "[Institute / University Name]",
+  "academic_year": "[Academic Year, e.g. 2026-27]",
+  "submission_date": "[Date of Submission]",
+  "live_demo_url": "https://askmargin.vercel.app"
+}

@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.vercel/
+__pycache__/
+*.pyc
+.env*
+*.tsbuildinfo
+notebook/run.log
+.ipynb_checkpoints/
