@@ -15,7 +15,7 @@
 | sentence-500 | Dense (MiniLM) | 0.36 | 0.60 | 0.80 | 0.511 |
 | sentence-500 | Hybrid (BM25 + Dense, RRF) | **0.52** | **0.80** | **0.88** | **0.665** |
 
-The best single configuration is the **hybrid retriever on sentence-aware chunks**: Recall@1 0.52, Recall@3 0.80, Recall@5 0.88 and MRR 0.665. Three honest observations follow. (1) **Sentence-aware chunking is not clearly better than fixed windows.** BM25 on fixed chunks reaches Recall@3 of 0.80 while BM25 on sentence chunks reaches 0.68, and TF-IDF is also higher on fixed chunks; sentence chunks win only with the hybrid retriever and for Recall@5 with dense retrieval. With 25 questions one question equals 0.04, so most gaps between rows are within noise. (2) **Dense retrieval alone was not better than keyword search**: Recall@3 is 0.60 against 0.72 to 0.80 for TF-IDF or BM25 on fixed chunks. A likely reason is that the questions contain very specific tokens (numbers, names such as "FAISS" or "BLEU") that keyword methods match exactly. (3) The **hybrid** combines both signals and is the most robust choice on sentence chunks.
+The best single configuration is the **hybrid retriever on sentence-aware chunks**: Recall@1 0.52, Recall@3 0.80, Recall@5 0.88 and MRR 0.665. Three honest observations follow. (1) **Sentence-aware chunking is not clearly better than fixed windows.** BM25 on fixed chunks reaches Recall@3 of 0.80 while BM25 on sentence chunks reaches 0.68, and TF-IDF is also higher on fixed chunks; sentence chunks win only with the hybrid retriever and for Recall@5 with dense retrieval. With 25 questions one question equals 0.04, so most gaps between rows are within noise. (2) **Dense retrieval alone was not better than keyword search**: Recall@3 is 0.60 against 0.72 to 0.80 for TF-IDF or BM25 on fixed chunks. A likely reason is that many questions contain very specific tokens (numbers, names such as "FAISS") that keyword methods match exactly. (3) The **hybrid** combines both signals and is the most robust choice on sentence chunks.
 
 {{CAP:tcap|<b>Table 6.2</b> Chunk-size ablation: dense retrieval, sentence-aware chunking (from chunk_size_ablation.csv).}}
 
@@ -26,7 +26,7 @@ The best single configuration is the **hybrid retriever on sentence-aware chunks
 | 800 | 373 | 0.40 | 0.64 | 0.80 | 0.538 |
 | 1200 | 232 | 0.32 | 0.56 | 0.72 | 0.447 |
 
-The largest chunks (1200 characters) are worst, plausibly because one vector must then summarise several topics. The smallest size (250 characters) is best for dense retrieval, but the trend is not monotonic (800 is above 500), which again points to the noise level of a 25-question test.
+The largest chunks (1200 characters) are worst. The smallest size (250 characters) is best for dense retrieval, but the trend is not monotonic (800 is above 500), which again points to the noise of a 25-question test.
 
 ## 6.2 Refusal and full-answer results
 
@@ -52,17 +52,17 @@ Citation accuracy (52%) is lower than answer accuracy (68%): four questions (11,
 
 * **Small test set.** Twenty-five answerable and five unanswerable questions; one question is 4 percentage points, so differences between close methods are not statistically reliable.
 * **Threshold tuned on the test questions.** The value 0.24 was chosen with the same 30 questions it is evaluated on. The gap between the groups is wide (0.237 against 0.459), but the out-of-document questions are completely off-topic. Questions that are close to the document's topic yet unanswered by it are harder and were not tested.
-* **Strict and lenient metrics.** A hit needs the exact answer string, so a correct passage with different wording counts as a miss; faithfulness is only word overlap and does not prove that an answer is true.
+* **Crude metrics.** A hit needs the exact answer string, so differently worded evidence is a miss; faithfulness is only word overlap.
 * **Small generator.** FLAN-T5-base (250 M parameters) can pick a wrong number from the context.
 * **One corpus.** Four English NLP papers; tables, equations and two-column layouts can still hurt extraction.
 
 ## 6.5 Future work
 
-Add a **cross-encoder re-ranker** that reorders the top 10 candidates before generation; replace FLAN-T5-base with a stronger model; extend the evaluation set with close-but-unanswerable questions and tune the threshold on a separate validation split; and add OCR for scanned PDFs.
+Add a **cross-encoder re-ranker** for the top 10 candidates; use a stronger generator than FLAN-T5-base; add close-but-unanswerable questions and tune the threshold on a separate validation split; add OCR for scanned PDFs.
 
 ## 6.6 Conclusion
 
-Askmargin is a complete RAG pipeline written in Python: PDF extraction and cleaning, tokenisation, stop-word removal and lemmatisation, two chunking strategies, TF-IDF, BM25 and dense embeddings, a NumPy and FAISS vector store with cosine similarity, a hybrid retriever, a similarity-based refusal rule and answer generation with FLAN-T5. On 30 hand-written questions over four public papers the best retriever (hybrid on sentence-aware chunks) put the answer chunk in the top 3 for 80% of the questions and in the top 5 for 88%. The full system answered 68% of the questions correctly, refused all 5 out-of-document questions without refusing any answerable one, and produced answers with 0.95 faithfulness to the retrieved text. The main lesson is that **retrieval quality decides answer quality**: finding the right chunk more reliably would improve the answers more than changing the generator.
+Askmargin is a complete RAG pipeline written in Python: PDF extraction and cleaning, tokenisation, stop-word removal and lemmatisation, two chunking strategies, TF-IDF, BM25 and dense embeddings, a NumPy and FAISS vector store with cosine similarity, a hybrid retriever, a similarity-based refusal rule and answer generation with FLAN-T5. On 30 hand-written questions over four public papers the best retriever (hybrid on sentence-aware chunks) put the answer chunk in the top 3 for 80% of the questions and in the top 5 for 88%. The full system answered 68% of the questions correctly, refused all 5 out-of-document questions without refusing any answerable one, and produced answers with 0.95 faithfulness to the retrieved text. The main lesson is that **retrieval quality decides answer quality**.
 
 ## 6.7 References
 

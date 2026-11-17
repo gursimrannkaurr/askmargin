@@ -17,14 +17,13 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parent.parent
 SRC, DATA, SCREENS, DIST = ROOT / "src", ROOT / "data", ROOT / "screens", ROOT / "dist"
 DIST.mkdir(exist_ok=True)
-CFG = json.loads((ROOT / "config.json").read_text(encoding="utf8"))
 NB = json.loads((DATA / "executed.ipynb").read_text(encoding="utf8"))
 CELLS = NB["cells"]
 FINAL = DIST / "Askmargin_NLP_Project_Report.pdf"
 md = MarkdownIt("commonmark", {"html": True}).enable("table")
 FMT = HtmlFormatter(nowrap=True)
 HEADS = []
-FLOW = {"2", "3", "5", "6"}   # chapters that continue on the same page (saves paper)
+FLOW = {"2", "3", "4", "5", "6"}   # chapters that continue on the same page (saves paper)
 
 
 def b64(path):
@@ -85,62 +84,22 @@ def figure(name, cap, width="86%"):
     return f'<figure><img src="{b64(p)}" style="width:{width}"><div class="fcap">{cap}</div></figure>'
 
 
-EXPECTED_SHOTS = [("02-answer.png", "A grounded answer: best sentences, page citations and the stage-by-stage trace"),
-                  ("04-refusal.png", "Refusal: best cosine 0.18 is below the 0.24 threshold, so nothing is shown"),
-]
+EXPECTED_SHOTS = [("01-home-brief.png", "Landing page: the headline result of the notebook"),
+                  ("06-semantic-map.png", "Semantic map: the question (star) among the chunk embeddings (PCA)"),
+                  ("02-answer.png", "Answer page: best sentences with page citations and the stage-by-stage trace"),
+                  ("04-refusal.png", "Refusal: best cosine 0.18 is below the 0.24 threshold, so nothing is shown")]
 
 
 def site_gallery():
     cells = []
     for n, c in EXPECTED_SHOTS:
         p = SCREENS / n
-        cls = ' class="wide"' if n.startswith("01") else ""
         if p.exists():
-            cells.append(f'<figure{cls}><img src="{b64(p)}"><div class="fcap">{html.escape(c)}</div></figure>')
+            cells.append(f'<figure><img src="{b64(p)}"><div class="fcap">{html.escape(c)}</div></figure>')
         else:
-            cells.append(f'<figure{cls}><div class="ph-shot">PLACEHOLDER<br>report/screens/{n}<br>{html.escape(c)}</div><div class="fcap">{html.escape(c)}</div></figure>')
-    return '<div class="site">' + "".join(cells) + "</div>"
-
-
-def v(k):
-    t = html.escape(CFG[k])
-    return f'<span class="ph">{t}</span>' if t.startswith("[") else t
-
-
-def cover():
-    return f'''<section class="cover">
-<div><div class="inst">{v("institute")}</div><div class="sub">Academic Year {v("academic_year")}</div></div>
-<div><div class="logo">Ask<span>margin</span></div>
-<div class="tag">RAG Document Q&amp;A Assistant</div>
-<div class="sub" style="margin-top:14pt">Mini-project report: a complete NLP pipeline for question answering<br>with page citations over PDF documents</div>
-<div class="course">Natural Language Processing</div></div>
-<table class="meta">
-<tr><td>Submitted by</td><td>{v("student_name")}</td></tr>
-<tr><td>Enrolment No.</td><td>{v("enrolment_no")}</td></tr>
-<tr><td>Course</td><td>{v("course")}</td></tr>
-<tr><td>Section</td><td>{v("section")}</td></tr>
-<tr><td>Semester</td><td>{v("semester")}</td></tr>
-<tr><td>Submitted to</td><td>{v("submitted_to")}</td></tr>
-<tr><td>Date</td><td>{v("submission_date")}</td></tr>
-</table>
-<div class="url">Live demo: {html.escape(CFG["live_demo_url"])}</div>
-</section>'''
-
-
-def declaration():
-    return f'''<section class="front"><h2>Declaration</h2>
-<p>I, {v("student_name")} (Enrolment No. {v("enrolment_no")}), hereby declare that the mini-project report titled
-<b>"Askmargin: RAG Document Q&amp;A Assistant"</b>, submitted for the course Natural Language Processing, is the result of my own work.
-The pipeline described in this report (text extraction, cleaning, tokenisation, chunking, TF-IDF, BM25 and dense retrieval, vector search,
-refusal logic and answer generation) was implemented by me in Python, and every number reported here was produced by running the accompanying notebook.
-Public datasets, libraries and pre-trained models that I used are credited in the References section.</p>
-<div class="sig"><div>Date: {v("submission_date")}</div><div style="text-align:center">{v("student_name")}<br>{v("enrolment_no")}</div></div>
-<h2 style="margin-top:34pt">Acknowledgement</h2>
-<p>I would like to thank {v("submitted_to")} for guidance during the course and for the freedom to choose a real-world
-problem for this project. I am also grateful to {v("institute")} for the facilities provided, and to the authors of the open-source tools and open-access papers
-(PyMuPDF, NLTK, scikit-learn, rank-bm25, Sentence-Transformers, FAISS, Hugging Face Transformers, and the arXiv papers used as the
-document corpus) whose work made it possible to build and test this system without any paid service.</p>
-<div class="sig"><div></div><div style="text-align:center">{v("student_name")}</div></div></section>'''
+            cells.append(f'<figure><div class="ph-shot">PLACEHOLDER<br>report/screens/{n}<br>{html.escape(c)}</div><div class="fcap">{html.escape(c)}</div></figure>')
+    rows = ["".join(cells[i:i + 2]) for i in range(0, len(cells), 2)]
+    return "".join(f'<div class="site">{r}</div>' for r in rows)
 
 
 def render_body():
@@ -198,10 +157,31 @@ def collect_heads(body):
     return body
 
 
+DESC = {
+    "1": "Why language models hallucinate, where document Q&A is used, and the objectives of this project.",
+    "2": "The four public arXiv papers, the chunks produced from them and the 30-question evaluation set.",
+    "3": "The eleven pipeline stages with the technique and the formula used at each stage.",
+    "4": "The complete notebook code, cell by cell, with an explanation of every cell.",
+    "5": "Real notebook outputs, figures and screenshots of the live web demo.",
+    "6": "Retrieval and answer results, error analysis, limitations, future work, conclusion, references.",
+}
+
+
 def toc_html(pages):
-    out = ['<section class="front toc-sec"><h2>Contents</h2><div class="toc">']
+    out = ['<section class="tocpage"><div class="tophead">Askmargin: RAG Document Q&amp;A Assistant &nbsp;|&nbsp; NLP project</div>',
+           '<h2 class="toctitle">Contents</h2><div class="toc">']
     for lvl, tid, label in HEADS:
-        out.append(f'<div class="l c{lvl}"><span class="t">{html.escape(label)}</span><span class="d"></span><span>{pages.get(tid, "")}</span></div>')
+        pg = pages.get(tid, "")
+        if lvl == 1:
+            num = re.match(r"Chapter (\d+)", label).group(1)
+            name = re.sub(r"^Chapter \d+: ", "", label)
+            out.append(f'<div class="chap"><div class="l c1"><span class="t"><span class="cn">{num}</span>{html.escape(name)}</span><span class="d"></span><span class="pn">{pg}</span></div>'
+                       f'<div class="cdesc">{html.escape(DESC[num])}</div>')
+        else:
+            out.append(f'<div class="l c2"><span class="t">{html.escape(label)}</span><span class="d"></span><span>{pg}</span></div>')
+        nxt = HEADS[HEADS.index((lvl, tid, label)) + 1] if HEADS.index((lvl, tid, label)) + 1 < len(HEADS) else None
+        if nxt is None or nxt[0] == 1:
+            out.append("</div>")
     out.append("</div></section>")
     return "".join(out)
 
@@ -210,7 +190,7 @@ def build_pdf(pages):
     body = collect_heads(render_body())
     css = (SRC / "report.css").read_text(encoding="utf8")
     doc = (f"<!doctype html><html><head><meta charset='utf-8'><title>Askmargin NLP Project Report</title>"
-           f"<style>{css}</style></head><body>{cover()}{declaration()}{toc_html(pages)}{body}</body></html>")
+           f"<style>{css}</style></head><body>{toc_html(pages)}{body}</body></html>")
     (DIST / "report.html").write_text(doc, encoding="utf8")
     raw = DIST / "_raw.pdf"
     with sync_playwright() as p:
@@ -226,7 +206,7 @@ def build_pdf(pages):
 def find_pages(raw):
     d = fitz.open(raw)
     texts = [re.sub(r"\s+", " ", d[i].get_text()) for i in range(len(d))]
-    res, start, chap = {}, 2, {}
+    res, start, chap = {}, 1, {}
     for lvl, tid, label in HEADS:
         needle = re.sub(r"^Chapter \d+: ", "", label)
         mm = re.match(r"(?:Chapter )?(\d+)", label)
@@ -254,7 +234,7 @@ def stamp(raw):
         w = fitz.get_text_length(t, fontname="helv", fontsize=8.5)
         page.insert_text((r.width - 54 - w, r.height - 40), t, fontsize=8.5, fontname="helv", color=(.1, .1, .1))
     d.set_metadata({"title": "Askmargin: RAG Document Q&A Assistant - NLP Project Report",
-                    "author": CFG["student_name"], "subject": "Natural Language Processing"})
+                    "subject": "Natural Language Processing"})
     d.save(FINAL, garbage=3, deflate=True)
     n = len(d)
     d.close()

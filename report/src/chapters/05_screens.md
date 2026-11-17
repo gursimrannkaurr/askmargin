@@ -10,8 +10,6 @@ This chapter shows the real output of every cell of the executed notebook (it wa
 
 {{OUT:11|Step 4: chunk statistics for the two strategies}}
 
-{{OUT:13|Step 5: the evaluation set}}
-
 ## 5.2 Vectors, vector store and retrieval
 
 {{OUT:15|Step 6: building TF-IDF, BM25 and dense indexes}}

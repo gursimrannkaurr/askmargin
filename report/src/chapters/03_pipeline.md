@@ -35,6 +35,8 @@ TF-IDF and BM25 compare **words**, so the text must first be turned into a clean
 3. **Stop-word removal** using the NLTK English list, dropping very common words ("the", "of", "is") that carry little meaning.
 4. **Lemmatisation** with the WordNet lemmatiser, which maps a word to its dictionary form ("layers" becomes "layer"). We use lemmatisation instead of stemming because it always returns real words.
 
+*Worked example (real notebook output).* The sentence "The encoder is composed of a stack of N = 6 identical layers." becomes the tokens `['encoder', 'composed', 'stack', 'identical', 'layer']`: "the", "is", "of", "a" are stop-words, and the one-character tokens "n" and "6" are dropped because the tokeniser keeps only tokens longer than one character (so single-digit numbers are lost in the lexical baselines, a small weakness of this pre-processing).
+
 The dense embedding model does **not** use this chain: a transformer reads the raw sentence, including stop-words, because words like "not" change meaning.
 
 ## 3.4 Chunking
@@ -44,7 +46,7 @@ An embedding model and a generator can only read a limited amount of text, and a
 * **Fixed-size chunking.** A window of 500 characters slides over the page text in steps of 400 (overlap of 100 characters). It is simple but may cut a sentence in the middle.
 * **Sentence-aware chunking.** The page is split into sentences with NLTK's Punkt tokenizer. Whole sentences are packed into a chunk until adding another would exceed 500 characters; the last sentence is then repeated at the start of the next chunk (one-sentence overlap), so the context is not lost at the boundary.
 
-Chunks never cross a page boundary, so every chunk has exactly one page number. A later ablation tests chunk sizes of 250, 500, 800 and 1200 characters.
+*Why overlap?* If an answer sentence sits exactly on a cut, a chunk without overlap would hold only half of it and neither half would match the question well; repeating 100 characters (or one sentence) gives the boundary text a second chance to be retrieved. Chunks never cross a page boundary, so every chunk has exactly one page number. A later ablation tests chunk sizes of 250, 500, 800 and 1200 characters.
 
 ## 3.5 Turning text into vectors
 
@@ -70,7 +72,7 @@ Retrieval means finding the chunk vectors closest to the question vector. We use
 
 <div class="formula"><i>cos</i>(<b>q</b>, <b>d</b>) = <span class="frac"><span><b>q</b> &middot; <b>d</b></span><span>&Vert;<b>q</b>&Vert; &Vert;<b>d</b>&Vert;</span></span> = <span class="frac"><span>&sum;<sub><i>i</i></sub> <i>q</i><sub><i>i</i></sub> <i>d</i><sub><i>i</i></sub></span><span>&radic;(&sum;<i>q</i><sub><i>i</i></sub><sup>2</sup>) &radic;(&sum;<i>d</i><sub><i>i</i></sub><sup>2</sup>)</span></span></div>
 
-Because our vectors have length 1, the denominator is 1 and cosine similarity is just a dot product, so searching the whole store is one matrix-vector multiplication (`E @ v`). The "vector store" is therefore a NumPy matrix with one row per chunk. We also build a **FAISS** `IndexFlatIP` (inner-product index), which does the same exact search in optimised C++ and is the structure that real systems scale up from; the notebook asserts that FAISS and NumPy return the same top results.
+Because our vectors have length 1, the denominator is 1 and cosine similarity is just a dot product, so searching the whole store is one matrix-vector multiplication (`E @ v`). The "vector store" is therefore a NumPy matrix with one row per chunk. We also build a **FAISS** `IndexFlatIP` (inner-product index), which does the same exact search in optimised C++ and is the structure that real systems scale up from; the notebook asserts that FAISS and NumPy return the same top results. *Worked example:* for the question "How many parallel attention heads does the Transformer use?" both return chunks 21, 46 and 22 with cosine scores 0.697, 0.696 and 0.637. A score near 1 means the same meaning and a score near 0 means unrelated text; this is also why a single cut-off on the best score can separate answerable from unanswerable questions (Section 3.8).
 
 ## 3.7 Retrieval methods compared
 
