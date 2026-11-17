@@ -1,21 +1,18 @@
-# Chapter 1 | Problem Introduction
+# Chapter 1 | Introduction
 
-## 1.1 The problem
+## 1.1 Natural Language Processing
 
-Many important documents are long PDFs: lecture notes, research papers, company policies, product manuals. When we need one fact from a 50-page PDF, we have to read many pages to find it. Ordinary keyword search (Ctrl+F) only finds exact words, so it fails when the question is worded differently from the text.
+Natural Language Processing (NLP) is a branch of Artificial Intelligence that helps computers read, understand and use human language. Common uses are chatbots, translation, search engines and question answering.
 
-Chatbots such as ChatGPT can answer questions easily, but they have two problems for this job. First, they do not know our private documents. Second, when they do not know the answer they often **make one up** and sound very sure. This is called *hallucination*. A wrong answer that sounds right is dangerous, because the reader cannot tell.
+## 1.2 Retrieval-Augmented Generation and Document Q&A
 
-## 1.2 What is RAG?
+Chatbots do not know our private documents and sometimes make up answers. Retrieval-Augmented Generation (RAG) fixes this in two parts: first the program **retrieves** the passages of the documents that match the question, then a language model **generates** a short answer from only those passages. The page number of each passage is shown, so the answer can be checked. Typical uses are study help, company documents and customer support.
 
-The idea used in this project is called **Retrieval-Augmented Generation (RAG)**. It works in two parts. First we *retrieve*: the program searches the documents and picks the few passages that are most related to the question. Then we *generate*: a language model writes a short answer using only those passages. Because the answer is built from the documents, we can also show **which page** it came from. If no passage is related enough, the program says "I could not find this in the documents" instead of guessing.
+## 1.3 Objective of the Project
 
-## 1.3 Where it is used
+The objective is to build **Askmargin**, a small document question-answering assistant in Python. It should:
 
-- **Study help:** ask questions about your own notes or textbooks and see the page to re-read.
-- **Company documents:** find a rule in hundreds of policy files.
-- **Customer support:** answer questions from the product manual, with the page as proof.
-
-## 1.4 Objective
-
-The objective of this mini-project is to build a small question-answering assistant, called **Askmargin**, in Python using NLP techniques. It reads four public PDF papers, finds the best passages for a question with two search methods, compares the two methods on ten test questions, writes an answer with an open language model, and refuses questions that the documents cannot answer.
+- read four public PDF papers and cut them into small chunks;
+- find the best chunks for a question with two search methods and compare them;
+- write a short answer with an open language model and show the pages used;
+- refuse questions that the documents cannot answer.

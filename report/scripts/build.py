@@ -5,7 +5,7 @@ Needs:  pip install markdown-it-py playwright pymupdf numpy pillow  &&  playwrig
 Inputs: src/chapters/*.md (text), src/report.css, src/diagram.svg,
         screens/colab/*.jpg (real Colab screenshots), screens/*.png (website screenshots),
         ../colab/askmargin_colab.ipynb (code printed in the appendix).
-Rules:  at most 19 pages; colour only inside the screenshot images (text and drawings must be gray).
+Rules:  at most 10 pages; colour only inside the screenshot images (text and drawings must be gray).
 """
 import base64, html, io, json, re, sys
 from pathlib import Path
@@ -20,10 +20,10 @@ SRC, SCREENS, DIST = ROOT / "src", ROOT / "screens", ROOT / "dist"
 NOTEBOOK = ROOT.parent / "colab" / "askmargin_colab.ipynb"
 DIST.mkdir(exist_ok=True)
 FINAL = DIST / "Askmargin_NLP_Project_Report.pdf"
-MAX_PAGES = 19
+MAX_PAGES = 10
 md = MarkdownIt("commonmark", {"html": True}).enable("table")
 HEADS, TABLES, FIGURES = [], [], []
-FLOW = {"2", "3", "5", "6"}   # chapters that continue on the same page
+FLOW = {"1", "2", "3", "5"}   # chapters that continue on the same page
 
 
 def png_uri(im):
@@ -146,14 +146,14 @@ def collect_lists(body):
 def find_pages(raw):
     d = fitz.open(raw)
     texts = [re.sub(r"\s+", " ", d[i].get_text()).lower() for i in range(len(d))]
-    res, start, chap = {}, 1, {}
+    res, start, chap = {}, 0, {}
     for lvl, tid, label in HEADS:
         needle = re.sub(r"^(?:Chapter|Appendix) \w+: ", "", label).lower()
         mm = re.match(r"(?:Chapter )?(\d+)", label)
         if lvl == 2 and mm and int(mm.group(1)) in chap:
             start = chap[int(mm.group(1))]
         for i in range(start, len(d)):
-            if needle in texts[i]:
+            if texts[i].count(needle) >= (2 if i == 0 else 1):   # page 1 also holds the contents list
                 res[tid] = i + 1
                 start = i
                 if lvl == 1 and mm:
@@ -181,7 +181,7 @@ def toc_html(pages):
             out.append(f'<div class="l c2"><span class="t">{html.escape(label)}</span><span class="d"></span><span>{pg}</span></div>')
         if idx + 1 >= len(HEADS) or HEADS[idx + 1][0] == 1:
             out.append("</div>")
-    for title, kind, items in (("List of Tables", "Table", TABLES),):
+    for title, kind, items in ():
         if items:
             out.append(f'<div class="lot-h">{title}</div><div class="lots">')
             for n, cap in items:
