@@ -2,10 +2,12 @@
 
 Usage (from the report/ folder):  python scripts/build.py
 Needs:  pip install markdown-it-py playwright pymupdf numpy pillow  &&  playwright install chromium
-Inputs: src/chapters/*.md (text), src/report.css, screens/colab/*.jpg, screens/*.png (real screenshots).
+Inputs: src/chapters/*.md (text), src/report.css, src/diagram.svg,
+        screens/colab/*.jpg (real Colab screenshots), screens/*.png (website screenshots),
+        ../colab/askmargin_colab.ipynb (code printed in the appendix).
 Rules:  at most 19 pages; colour only inside the screenshot images (text and drawings must be gray).
 """
-import base64, html, io, re, sys
+import base64, html, io, json, re, sys
 from pathlib import Path
 import fitz
 import numpy as np
@@ -15,20 +17,67 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC, SCREENS, DIST = ROOT / "src", ROOT / "screens", ROOT / "dist"
+NOTEBOOK = ROOT.parent / "colab" / "askmargin_colab.ipynb"
 DIST.mkdir(exist_ok=True)
 FINAL = DIST / "Askmargin_NLP_Project_Report.pdf"
 MAX_PAGES = 19
 md = MarkdownIt("commonmark", {"html": True}).enable("table")
+HEADS, TABLES, FIGURES = [], [], []
+FLOW = {"Dataset", "NLP Pipeline Step by Step", "Web Demo", "Results and Conclusion"}   # sections that continue on the same page
 
 
-def colour_image(path, crop=None):
-    """Real screenshot in full colour; the crop box 'x0,y0,x1,y1' only removes browser chrome / blank space."""
-    im = Image.open(path).convert("RGB")
-    if crop:
-        im = im.crop(tuple(int(v) for v in crop.split(",")))
+def png_uri(im):
     out = io.BytesIO()
     im.save(out, "PNG", optimize=True)
     return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode()
+
+
+def colour_image(path, crop=None):
+    """Real screenshot, kept in colour; optional crop box 'x0,y0,x1,y1' (pixels) only removes blank space."""
+    im = Image.open(path).convert("RGB")
+    if crop:
+        im = im.crop(tuple(int(v) for v in crop.split(",")))
+    return png_uri(im)
+
+
+def gray_svg(svg):
+    """Map every colour of the diagram to a gray (dark colours become black)."""
+    def f(m):
+        h = m.group(0)[1:]
+        if len(h) == 3:
+            h = "".join(c * 2 for c in h)
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        lum = round(.299 * r + .587 * g + .114 * b)
+        lum = 0 if lum < 115 else lum
+        return "#%02x%02x%02x" % (lum, lum, lum)
+    return re.sub(r"#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}", f, svg)
+
+
+SITE_SHOTS = [("02-answer.png", "Website: an answer with page citations and the stage-by-stage trace."),
+              ("04-refusal.png", "Website: refusal for an out-of-document question (best score 0.18 is below the threshold)."),
+              ("06-semantic-map.png", "Website: map of the chunks; the star is the question.")]
+
+
+def site_gallery():
+    cells = []
+    for k, (n, c) in enumerate(SITE_SHOTS, 1):
+        p = SCREENS / n
+        if p.exists():
+            cells.append(f'<figure class="web"><img src="{colour_image(p)}"><div class="fcap"><b>Figure {11+k}:</b> {html.escape(c)}</div></figure>')
+        else:
+            cells.append(f'<figure class="web"><div class="ph-shot">PLACEHOLDER report/screens/{n}</div><div class="fcap"><b>Figure {11+k}:</b> {html.escape(c)}</div></figure>')
+    return '<div class="site">' + "".join(cells) + "</div>"
+
+
+def appendix_code():
+    nb = json.loads(NOTEBOOK.read_text(encoding="utf8"))
+    out, k = [], 0
+    for c in nb["cells"]:
+        if c["cell_type"] != "code":
+            continue
+        k += 1
+        out.append(f'<div class="acell"><div class="ahead">Cell {k}</div><pre>{html.escape("".join(c["source"]).rstrip())}</pre></div>')
+    return "".join(out)
 
 
 def render_body():
@@ -39,55 +88,99 @@ def render_body():
         kind = m.group(1)
         a = [x.strip() for x in html.unescape(m.group(2)).split("|")]
         if kind == "IMG":
-            return (f'<figure><img src="{colour_image(SCREENS / a[0], a[1])}" style="width:{a[2]}">'
-                    f'<div class="fcap">{html.escape(a[4])}</div></figure>')
+            path = ROOT / "screens" / a[0]
+            return (f'<figure class="vs"><img src="{colour_image(path, a[1])}" style="width:{a[2]}">'
+                    f'<div class="fcap"><b>Figure {a[3]}:</b> {html.escape(a[4])}</div></figure>')
+        if kind == "DIAGRAM":
+            return f'<div class="diagram">{gray_svg((SRC / "diagram.svg").read_text(encoding="utf8"))}</div>'
+        if kind == "SITE":
+            return site_gallery()
+        if kind == "APPENDIX":
+            return appendix_code()
         if kind == "CAP":
             return f'<div class="{a[0]}">{a[1]}</div>'
         raise ValueError(kind)
-    h = re.sub(r"\{\{(\w+):(.*?)\}\}", tok, h, flags=re.S)
-    return re.sub(r"<p>\s*((?:<figure>.*?</figure>\s*)+|<div class=\"tcap\">.*?</div>)\s*</p>", r"\1", h, flags=re.S)
+
+    h = re.sub(r"<p>\{\{(\w+):(.*?)\}\}</p>", tok, h, flags=re.S)
+
+    def h1(m):
+        title = m.group(1)
+        cls = ' class="flow"' if title in FLOW else ""
+        return f'<h1{cls}>{title}</h1>'
+    return re.sub(r"<h1>(.*?)</h1>", h1, h)
 
 
-HEADS = []
-
-
-def tag_heads(body):
+def collect_heads(body):
     HEADS.clear()
 
-    def f(m):
+    def hh(m):
+        lvl = int(m.group(1))
+        label = html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", m.group(3)))).strip()
         tid = f"h{len(HEADS)}"
-        txt = html.unescape(re.sub(r"<[^>]+>", "", m.group(2)))
-        HEADS.append((int(m.group(1)), tid, txt))
-        return f'<h{m.group(1)} id="{tid}">{m.group(2)}</h{m.group(1)}>'
-    return re.sub(r"<h([23])>(.*?)</h\1>", f, body)
+        HEADS.append((lvl, tid, label))
+        return f'<h{lvl}{m.group(2)} id="{tid}">{m.group(3)}</h{lvl}>'
+    return re.sub(r"<h([12])([^>]*)>(.*?)</h\1>", hh, body, flags=re.S)
+
+
+def collect_lists(body):
+    TABLES.clear()
+    FIGURES.clear()
+    for m in re.finditer(r'<div class="tcap"><b>Table (\d+):</b>\s*(.*?)</div>', body, flags=re.S):
+        TABLES.append((m.group(1), re.split(r"\. |\(", html.unescape(re.sub(r"<[^>]+>", "", m.group(2))))[0].strip().rstrip(".")))
+    for m in re.finditer(r'<div class="fcap"><b>Figure (\d+):</b>\s*(.*?)</div>', body, flags=re.S):
+        FIGURES.append((m.group(1), re.split(r"\. |\(|:", html.unescape(re.sub(r"<[^>]+>", "", m.group(2))))[0].strip().rstrip(".")))
 
 
 def find_pages(raw):
     d = fitz.open(raw)
-    res, start = {}, 1
-    for lvl, tid, txt in HEADS:
+    texts = [re.sub(r"\s+", " ", d[i].get_text()).lower() for i in range(len(d))]
+    res, start, chap = {}, 1, 1
+    for lvl, tid, label in HEADS:
+        needle = label.lower()
+        if lvl == 2:
+            start = chap
         for i in range(start, len(d)):
-            lines = [re.sub(r"\s+", " ", l).strip() for l in d[i].get_text().split(chr(10))]
-            if txt in lines:
+            if needle in texts[i]:
                 res[tid] = i + 1
                 start = i
+                if lvl == 1:
+                    chap = i
                 break
+    for kind, items in (("Table", TABLES), ("Figure", FIGURES)):
+        for n, _ in items:
+            for i in range(1, len(d)):
+                if f"{kind} {n}:".lower() in texts[i]:
+                    res[f"{kind}{n}"] = i + 1
+                    break
     d.close()
     return res
 
 
 def toc_html(pages):
-    out = ['<section class="tocpage"><div class="toc">']
-    for lvl, tid, txt in HEADS:
-        out.append(f'<div class="l c{lvl}"><span class="t">{html.escape(txt)}</span><span class="d"></span><span>{pages.get(tid, "")}</span></div>')
+    out = ['<section class="tocpage"><h2 class="toctitle">Contents</h2><div class="toc">']
+    for idx, (lvl, tid, label) in enumerate(HEADS):
+        pg = pages.get(tid, "")
+        if lvl == 1:
+            out.append(f'<div class="chap"><div class="l c1"><span class="t">{html.escape(label)}</span><span class="d"></span><span>{pg}</span></div>')
+        else:
+            out.append(f'<div class="l c2"><span class="t">{html.escape(label)}</span><span class="d"></span><span>{pg}</span></div>')
+        if idx + 1 >= len(HEADS) or HEADS[idx + 1][0] == 1:
+            out.append("</div>")
+    for title, kind, items in (("List of Tables", "Table", TABLES),):
+        if items:
+            out.append(f'<div class="lot-h">{title}</div><div class="lots">')
+            for n, cap in items:
+                out.append(f'<div class="l c3"><span class="t">{kind} {n}: {html.escape(cap)}</span><span class="d"></span><span>{pages.get(kind + n, "")}</span></div>')
+            out.append("</div>")
     out.append("</div></section>")
     return "".join(out)
 
 
 def build_pdf(pages):
-    body = tag_heads(render_body())
+    body = collect_heads(render_body())
+    collect_lists(body)
     css = (SRC / "report.css").read_text(encoding="utf8")
-    doc = (f"<!doctype html><html><head><meta charset='utf-8'><title>Askmargin</title>"
+    doc = (f"<!doctype html><html><head><meta charset='utf-8'><title>Askmargin NLP Project Report</title>"
            f"<style>{css}</style></head><body>{toc_html(pages)}{body}</body></html>")
     (DIST / "report.html").write_text(doc, encoding="utf8")
     raw = DIST / "_raw.pdf"
@@ -102,14 +195,13 @@ def build_pdf(pages):
 
 
 def stamp(raw):
-    """Plain centred page number (digit only) on every page."""
     d = fitz.open(raw)
     for i, page in enumerate(d):
         r = page.rect
         t = str(i + 1)
         w = fitz.get_text_length(t, fontname="tiro", fontsize=11)
         page.insert_text(((r.width - w) / 2, r.height - 38), t, fontsize=11, fontname="tiro", color=(0, 0, 0))
-    d.set_metadata({"title": "Askmargin: Question Answering over Documents using RAG", "subject": "Natural Language Processing"})
+    d.set_metadata({"title": "Askmargin - NLP Project Report", "subject": "Natural Language Processing"})
     d.save(FINAL, garbage=3, deflate=True)
     n = len(d)
     d.close()
@@ -154,7 +246,10 @@ if __name__ == "__main__":
         raw = build_pdf(pages)
     n = stamp(raw)
     raw.unlink(missing_ok=True)
+    miss = [l for _, t, l in HEADS if t not in pages]
     print(f"{FINAL}  pages={n}")
+    if miss:
+        print("WARNING: headings not located:", miss)
     bt, bd, bp = check_colour(FINAL)
     print(f"colour check: coloured text spans={bt}, coloured drawings={bd}, non-gray pixels outside screenshots={bp}")
     if n > MAX_PAGES:
