@@ -1,86 +1,57 @@
-# Chapter 4 | Python Code with Explanations
+# Chapter 4 | Python Code with Explanations and Screenshots
 
-The complete notebook `askmargin_rag.ipynb` is shown below as VS Code screenshots, cell by cell, exactly as it was run. The label [n] is the execution counter of the notebook, so each cell can be matched with its output in Chapter 5.
+The code was written in a Google Colab notebook (`askmargin_colab.ipynb`) and run top to bottom. The screenshots below are real captures of the Colab page, each showing code and its output. The complete code is also printed as plain text in the Appendix.
 
-## 4.1 Setup, data and cleaning
+## 4.1 Install the libraries and download the PDFs
 
-Optional install cell for Google Colab (remove the # signs and run once). **Step 0, setup.** Imports the libraries, downloads the NLTK resources (sentence tokenizer, stop-words, WordNet), fixes the random seed to 42 and creates the data and figures folders.
+Step 1 installs three libraries: PyMuPDF (reads PDFs), sentence-transformers (embeddings) and NLTK (sentence splitting). Step 2 downloads the four papers from arXiv with the `requests` library and prints the size of each file.
 
-{{SHOT:1,3}}
+{{IMG:colab/colab-01.jpg|70,132,1100,690|100%|4.1|Colab: Step 1 (install) and the code of Step 2 (download).}}
 
-**Step 1, dataset.** A dictionary maps each key to a paper title and arXiv address; the loop downloads every PDF once and prints its size.
+## 4.2 Read and clean the text
 
-{{SHOT:5}}
+The output of Step 2 shows that all four papers were downloaded (2.22, 0.78, 0.89 and 0.55 MB). Step 3 defines `clean()`, which joins words broken by a hyphen at the end of a line and removes extra spaces, then reads every page and keeps its document name, page number and text.
 
-**Step 2, ingest and clean.** `clean()` applies NFKC normalisation, re-joins hyphenated line breaks and collapses whitespace; `load_pdf()` stores the document key, page number and text of every page (the page number later becomes the citation).
+{{IMG:colab/colab-02.jpg|70,112,1100,690|100%|4.2|Colab: output of Step 2 and the code of Step 3 (read and clean).}}
 
-{{SHOT:7}}
+## 4.3 Split the pages into chunks
 
-## 4.2 Tokens and chunks
+Step 3 found **61 pages** in total (the printed sample is the start of page 5 of the Transformer paper). Step 4 cuts each page into chunks of whole sentences of about 500 characters, using the NLTK sentence tokenizer, with the last sentence repeated as overlap. The result is **716 chunks**; chunk number 20 is printed as an example.
 
-**Step 3, preprocessing.** `tokenize()` lower-cases, extracts alphanumeric tokens with a regular expression, removes stop-words and one-letter tokens and lemmatises; it feeds TF-IDF and BM25 only.
+{{IMG:colab/colab-03.jpg|70,112,1100,690|100%|4.3|Colab: output of Step 3 (61 pages) and the code of Step 4 (chunking).}}
 
-{{SHOT:9}}
+## 4.4 TF-IDF search
 
-**Step 4, chunking.** `chunk_fixed()` slides a 500-character window with 100 characters overlap; `chunk_sentence()` packs whole sentences up to 500 characters and repeats the last sentence at the start of the next chunk. Both keep the page number.
+Step 5 builds the TF-IDF table of all chunks (English stop-words removed) and defines `search_tfidf()`, which scores every chunk against a question. For the question about the number of attention heads, TF-IDF returned a chunk from page 15 of the Transformer paper with score 0.33. Reading it shows that it is a caption of a figure about attention heads, not the sentence that gives the number. This is typical for word matching: the right words are present, but not the answer.
 
-{{SHOT:11@0-23}}
+{{IMG:colab/colab-04.jpg|70,112,1100,690|100%|4.4|Colab: output of Step 4 (716 chunks) and the code and output of Step 5 (TF-IDF).}}
 
+## 4.5 Embedding search
 
+Step 6 loads the MiniLM embedding model, turns all chunks into vectors of shape (716, 384), and defines `search_embed()`. Because the vectors are normalised, a simple dot product gives the cosine similarity. For the same question the top three chunks are from pages 2, 5 and 2 of the Transformer paper, with scores 0.71, 0.70 and 0.65. The output screenshot is cropped to its last lines; the lines above them are only download progress bars of the model.
 
-{{SHOT:11@23-30}}
+{{IMG:colab/colab-05.jpg|45,140,600,365|80%|4.5|Colab: code of Step 6 (embeddings). This capture has a lower resolution than the others.}}
 
-## 4.3 Evaluation set and vector representations
+{{IMG:colab/colab-06.jpg|70,525,800,635|75%|4.6|Colab: output of Step 6: vector shape (716, 384) and the top three chunks with their scores.}}
 
-**Step 5, evaluation set.** Loads the 30 questions; `is_hit()` defines a correct chunk and `evaluate()` returns Recall@1, 3, 5 and MRR for any ranking function, so every retriever is compared fairly.
+## 4.6 Compare the two methods
 
-{{SHOT:13@0-22}}
+Step 7 holds the ten test questions, each with the paper it belongs to and the answer text that must appear in a retrieved chunk. The function `accuracy()` counts how many questions have the answer inside one of the top 3 chunks. Both methods score **0.9**, that is 9 correct out of 10.
 
-**Step 6, vectors.** The `Index` class builds a TF-IDF matrix, a BM25 index and the 384-dimensional MiniLM embeddings, and offers four rankers: TF-IDF, BM25, dense and a hybrid using Reciprocal Rank Fusion.
+{{IMG:colab/colab-07.jpg|70,112,1100,690|100%|4.7|Colab: Step 7, the ten test questions and the accuracy function.}}
 
-{{SHOT:13@22-26,15@0-9}}
+## 4.7 Generate the answer
 
+The output of Step 7 shows TF-IDF 0.9 and Embeddings 0.9. Step 8 loads FLAN-T5-base and defines `ask()`. It finds the top 3 chunks with the embedding search, refuses if the best score is below `THRESHOLD = 0.25`, otherwise builds the prompt, lets FLAN-T5 write a short answer, and appends the sources (document and page of each chunk).
 
+{{IMG:colab/colab-08.jpg|70,112,1100,690|100%|4.8|Colab: output of Step 7 (0.9 and 0.9) and the code of Step 8 (generation).}}
 
-{{SHOT:15@9-25}}
+The model files (about 1 GB) are downloaded the first time, as shown below.
 
+{{IMG:colab/colab-09.jpg|70,112,1100,330|100%|4.9|Colab: end of the code of Step 8 and the model-loading output.}}
 
+## 4.8 Try it
 
-{{SHOT:15@25-46}}
+Step 9 asks four questions. The answers are in the next screenshot. The BERT vocabulary size (30,000) and the Wikipedia index size (21M documents) are correct. For the question about the generator model, the answer "RAG-Token Model" is **wrong**: the paper uses BART, which the system did not find. The question about France is correctly refused.
 
-**Step 7, vector store.** Builds a FAISS inner-product index, asserts that its top-3 equals the NumPy cosine top-3 and prints the retrieved chunks with page numbers.
-
-{{SHOT:17}}
-
-## 4.4 Retrieval evaluation and ablation
-
-**Step 8, retrieval evaluation.** Evaluates all four methods on both chunkings, saves a CSV and draws the Recall@3 chart. **Ablation.** Repeats dense retrieval with chunk sizes 250, 500, 800 and 1200 characters.
-
-{{SHOT:19}}
-
-
-
-{{SHOT:21}}
-
-## 4.5 Refusal, generation and answer evaluation
-
-**Step 9, refusal threshold.** Computes the best cosine of every question and scans thresholds from 0.10 to 0.70 for the best accept/refuse accuracy.
-
-{{SHOT:23}}
-
-**Step 10, generation.** Loads FLAN-T5-base and defines the prompt and `ask()`: retrieve the top 3 chunks, refuse below the threshold, otherwise generate with beam search and attach the citations from chunk metadata.
-
-{{SHOT:25@0-14}}
-
-
-
-{{SHOT:25@14-33}}
-
-**Step 11, answer evaluation.** Runs `ask()` on the 25 answerable questions and records correctness, citation, faithfulness and wrong refusals, then counts refusals on the 5 out-of-document questions. **Step 12, error analysis.** Prints expected answer, generated answer and evidence status for each wrong answer.
-
-{{SHOT:27}}
-
-**Step 13, export.** Saves the chunks (JSON) and embeddings (16-bit floats) for the website.
-
-{{SHOT:29,31}}
-
+{{IMG:colab/colab-10.jpg|70,112,1100,560|100%|4.10|Colab: Step 9, four questions with answers and sources.}}

@@ -1,42 +1,21 @@
 # Chapter 1 | Problem Introduction
 
-## 1.1 The problem in one paragraph
+## 1.1 The problem
 
-Large language models (LLMs) such as ChatGPT can write fluent answers to almost any question, but they have two weaknesses that matter a lot in real work. First, they only know what was in their training data, so they know nothing about *your* documents: a company policy, a lecture PDF, a signed contract, a patient report. Second, when they do not know something they often **hallucinate**, which means they produce a confident, well-written answer that is simply false. A model that sounds sure but is wrong is worse than no model at all, because the reader has no way to notice the mistake.
+Many important documents are long PDFs: lecture notes, research papers, company policies, product manuals. When we need one fact from a 50-page PDF, we have to read many pages to find it. Ordinary keyword search (Ctrl+F) only finds exact words, so it fails when the question is worded differently from the text.
 
-**Askmargin** is the NLP application built in this project to address both weaknesses. The user gives it a set of PDF documents and asks a question in plain English. Askmargin finds the passages of the documents that are most relevant to the question, writes a short answer using *only* those passages, and shows the **page number** where the evidence was found. If the documents do not contain the answer, it says so instead of guessing. The name comes from the habit of writing a note in the margin of a page: every answer points back to a page.
+Chatbots such as ChatGPT can answer questions easily, but they have two problems for this job. First, they do not know our private documents. Second, when they do not know the answer they often **make one up** and sound very sure. This is called *hallucination*. A wrong answer that sounds right is dangerous, because the reader cannot tell.
 
-The technique used is called **Retrieval-Augmented Generation (RAG)**. Instead of asking the model to answer from memory, we first *retrieve* relevant text from a document collection and then let the model *generate* an answer from that text. RAG is currently the most common way in which companies connect an LLM to private data.
+## 1.2 What is RAG?
 
-## 1.2 Why plain LLMs hallucinate
+The idea used in this project is called **Retrieval-Augmented Generation (RAG)**. It works in two parts. First we *retrieve*: the program searches the documents and picks the few passages that are most related to the question. Then we *generate*: a language model writes a short answer using only those passages. Because the answer is built from the documents, we can also show **which page** it came from. If no passage is related enough, the program says "I could not find this in the documents" instead of guessing.
 
-A language model is trained to predict the next word. It learns patterns of language and a large amount of world knowledge, but this knowledge is stored loosely inside its weights and is not looked up the way a database record is. Three things follow from this:
+## 1.3 Where it is used
 
-* **Knowledge is frozen.** Anything that happened after the training date, or anything that was never public (internal reports, personal files), is unknown to the model.
-* **There is no built-in "I do not know".** The model always produces the most likely next words, so for an unknown fact it produces a plausible-sounding guess.
-* **There is no source.** The answer cannot be checked because the model cannot say where it learnt a fact.
+- **Study help:** ask questions about your own notes or textbooks and see the page to re-read.
+- **Company documents:** find a rule in hundreds of policy files.
+- **Customer support:** answer questions from the product manual, with the page as proof.
 
-RAG attacks all three: the knowledge lives in a document store that can be updated at any time, the model is told to use only the supplied text, and each supplied chunk carries its page number, which becomes the citation.
+## 1.4 Objective
 
-## 1.3 Real-world applications
-
-The same pipeline (split documents, search them by meaning, answer from the best passages, cite the source) is used in many industries:
-
-| Domain | Typical question | Why RAG fits |
-|---|---|---|
-| Enterprise search | "What is our laptop replacement policy for new joiners?" | Thousands of wikis, PDFs and slide decks that keyword search handles poorly; answers must follow the current version of a policy. |
-| Customer support | "How do I reset the router to factory settings?" | Answers must come from the manual of the exact product, and a wrong instruction costs money. |
-| Legal | "What is the notice period in clause 14 of this agreement?" | Lawyers need the exact clause and page, not a summary from memory. |
-| Medical | "What dose adjustment does this guideline recommend for kidney patients?" | Guidelines change; the answer must cite the approved document and refuse when it is not covered. |
-| Education | "Explain the difference between BERT and Sentence-BERT from my notes." | A study assistant that answers from the student's own material and tells them which page to re-read. |
-
-In legal and medical settings a **refusal** is as important as a correct answer. A system that answers "I could not find this in the documents" when the question is out of scope is safer than one that always answers. This is why refusal is a first-class feature of Askmargin and is evaluated separately.
-
-## 1.4 Objectives of the project
-
-1. Choose a real-world NLP task (document question answering) and a public dataset (four open-access research papers).
-2. Implement every stage of the pipeline ourselves in Python: text extraction and cleaning, tokenisation, stop-word removal, lemmatisation, chunking, TF-IDF, BM25, dense sentence embeddings, a vector store with cosine similarity and FAISS, a refusal rule, and answer generation with an open model.
-3. Evaluate honestly on a hand-written test set of 30 questions, using Recall@k, Mean Reciprocal Rank (MRR) and answer-level checks, and compare design choices (retrieval method, chunking strategy, chunk size).
-4. Show the result as a working web demo at <b>askmargin.vercel.app</b>.
-
-Everything runs on free tools (PyMuPDF, NLTK, scikit-learn, rank-bm25, Sentence-Transformers, FAISS, FLAN-T5 through Hugging Face Transformers) on a laptop CPU or free Google Colab, so every number in this report can be reproduced.
+The objective of this mini-project is to build a small question-answering assistant, called **Askmargin**, in Python using NLP techniques. It reads four public PDF papers, finds the best passages for a question with two search methods, compares the two methods on ten test questions, writes an answer with an open language model, and refuses questions that the documents cannot answer.

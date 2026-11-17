@@ -1,21 +1,23 @@
 # Askmargin NLP project report (hard copy)
 
-Output: `dist/Askmargin_NLP_Project_Report.pdf` (19 pages, A4). Black-and-white academic text, tables, headings and contents page; colour appears only inside the designated screenshot images (VS Code code shots, notebook output shots, website screenshots). Footer: centred page number only. Page 1 is the Contents page with a List of Tables.
+Output: `dist/Askmargin_NLP_Project_Report.pdf` (14 pages, A4). Plain black-and-white academic text (Times, centred page numbers only). Colour appears only inside the real screenshots.
 
 ## Build
 ```
-pip install markdown-it-py pygments playwright pymupdf numpy pillow
+pip install markdown-it-py playwright pymupdf numpy pillow
 playwright install chromium
 python scripts/build.py
 ```
-Checks done by the script on every build:
-- exit code 2 if the PDF has more than 19 pages;
-- exit code 3 if any text span or vector drawing is not gray, or any pixel outside the screenshot images is not gray (R=G=B).
+The script fails (exit 2) if the PDF has more than 19 pages, and (exit 3) if any text, vector drawing or pixel outside the screenshot images is not gray.
+
+## Contents of the report
+Contents page, 1 Problem Introduction, 2 Dataset, 3 NLP Pipeline, 4 Python Code with Explanations and Screenshots (10 real Colab screenshots), 5 Web Demo (3 real website screenshots), 6 Results and Conclusion, Appendix A (complete code as plain text).
 
 ## Where things come from
-- `data/executed.ipynb`, `data/figures/`: copies of the executed notebook and its figures/CSVs. Chapter 4 (code) and Chapter 5 (outputs) are rendered from it, so they match the notebook. If you re-run the notebook, copy the new files here and rebuild. Numbers typed in `src/chapters/*.md` (Ch. 2, 3, 6) must be updated by hand if results change.
-- `scripts/shots.py`: renders VS Code-style dark windows (title bar, activity bar, tab `askmargin_rag.ipynb`, line numbers, Dark+ colours, status bar "Python 3.12") with Chromium at device scale factor 2. Images are cached in `dist/shots/`. Notebook charts inside output shots are converted to grayscale.
-- `src/chapters/*.md`: report text. Tokens: `{{SHOT:15@0-23,17}}` (code cells, optional line slice), `{{OUTS:19,29:14|caption}}` (output cells, optional max lines), `{{SITE:x}}` (website screenshots).
-- `src/report.css`, `src/diagram.svg` (pipeline diagram, converted to gray at build time).
-- `screens/`: website screenshots, used unedited in colour (`02-answer`, `04-refusal`, `06-semantic-map`; list in `build.py`, `EXPECTED_SHOTS`). A missing file is replaced by a labelled placeholder.
-- Page numbers are stamped by PyMuPDF after rendering.
+- `src/chapters/*.md`: the text (plain markdown). Tokens: `{{IMG:colab/colab-01.jpg|x0,y0,x1,y1|width|figure no.|caption}}` inserts a real screenshot cropped only to remove blank space; `{{SITE:x}}` the website screenshots; `{{DIAGRAM:x}}`; `{{APPENDIX:x}}` prints all code cells of `../colab/askmargin_colab.ipynb` as plain text.
+- `screens/colab/colab-01..10.jpg`: real Google Colab captures. `screens/*.png`: website captures (02-answer, 04-refusal, 06-semantic-map; a missing file becomes a labelled placeholder).
+- `src/report.css`, `src/diagram.svg` (converted to gray when building).
+- Numbers in the text come from the Colab screenshots (716 chunks, 61 pages, TF-IDF 0.9, embeddings 0.9, threshold 0.25, demo answers).
+
+## Unused leftovers from earlier versions (safe to delete)
+`data/` (old big-notebook outputs), `scripts/shots.py` (VS Code image generator), `dist/shots/`, `dist/report.html`. The build no longer uses them.

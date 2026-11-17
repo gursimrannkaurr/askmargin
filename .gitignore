@@ -7,3 +7,5 @@ __pycache__/
 *.tsbuildinfo
 notebook/run.log
 .ipynb_checkpoints/
+report/dist/report.html
+report/dist/_raw.pdf
