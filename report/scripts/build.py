@@ -5,13 +5,15 @@ Needs:  pip install markdown-it-py pygments playwright pymupdf  &&  playwright i
 Inputs: config.json (your details), data/executed.ipynb + data/figures (copied from the executed
         notebook), src/chapters/*.md (text), screens/*.png (website screenshots, optional).
 """
-import base64, html, json, re, sys
+import base64, html, io, json, re, sys
 from pathlib import Path
 from markdown_it import MarkdownIt
 from pygments import highlight
 from pygments.lexers import PythonLexer
 from pygments.formatters import HtmlFormatter
 import fitz
+import numpy as np
+from PIL import Image
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,8 +28,36 @@ HEADS = []
 FLOW = {"2", "3", "4", "5", "6"}   # chapters that continue on the same page (saves paper)
 
 
+def gray_b64(raw_bytes):
+    """Convert any image to 8-bit grayscale (sources stay unchanged) and return a data URI."""
+    im = Image.open(io.BytesIO(raw_bytes))
+    if im.mode in ("RGBA", "LA", "P"):
+        im = im.convert("RGBA")
+        bg = Image.new("RGBA", im.size, (255, 255, 255, 255))
+        im = Image.alpha_composite(bg, im)
+    out = io.BytesIO()
+    im.convert("L").save(out, "PNG", optimize=True)
+    return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode()
+
+
 def b64(path):
-    return "data:image/png;base64," + base64.b64encode(Path(path).read_bytes()).decode()
+    return gray_b64(Path(path).read_bytes())
+
+
+def gray_svg(svg):
+    """Replace every colour in the diagram by a gray (dark colours become black)."""
+    def f(m):
+        h = m.group(0)[1:]
+        if len(h) == 3:
+            h = "".join(c * 2 for c in h)
+        r, g, bl = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        lum = round(.299 * r + .587 * g + .114 * bl)
+        lum = 0 if lum < 115 else lum
+        return "#%02x%02x%02x" % (lum, lum, lum)
+    return re.sub(r"#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}", f, svg)
+
+
+FIGN = [0]
 
 
 def src_of(i):
@@ -68,14 +98,15 @@ def out_panel(i, title=None, skip_images=False, maxlines=None):
                 parts.append(h)
             elif "image/png" in d:
                 if not skip_images:
-                    parts.append(f'<img src="data:image/png;base64,{d["image/png"].strip()}">')
+                    parts.append(f'<img src="{gray_b64(base64.b64decode(d["image/png"]))}">')
             elif "text/plain" in d:
                 parts.append(f"<pre>{html.escape(''.join(d['text/plain']))}</pre>")
         elif t == "error":
             parts.append(f'<pre class="stderr">{html.escape(strip_ansi(o["ename"] + ": " + o["evalue"]))}</pre>')
     if not parts:
         return ""
-    return (f'<div class="shot"><div class="bar"><b>{html.escape(title or "Output")}</b>'
+    FIGN[0] += 1
+    return (f'<div class="shot"><div class="bar"><b>Figure 5.{FIGN[0]}: {html.escape(title or "Output")}</b>'
             f'<span>Out of cell [{exec_count(i)}] - askmargin_rag.ipynb</span></div><div class="body">{"".join(parts)}</div></div>')
 
 
@@ -94,8 +125,9 @@ def site_gallery():
     cells = []
     for n, c in EXPECTED_SHOTS:
         p = SCREENS / n
+        FIGN[0] += 1
         if p.exists():
-            cells.append(f'<figure><img src="{b64(p)}"><div class="fcap">{html.escape(c)}</div></figure>')
+            cells.append(f'<figure><img src="{b64(p)}"><div class="fcap"><b>Figure 5.{FIGN[0]}:</b> {html.escape(c)}</div></figure>')
         else:
             cells.append(f'<figure><div class="ph-shot">PLACEHOLDER<br>report/screens/{n}<br>{html.escape(c)}</div><div class="fcap">{html.escape(c)}</div></figure>')
     rows = ["".join(cells[i:i + 2]) for i in range(0, len(cells), 2)]
@@ -103,6 +135,7 @@ def site_gallery():
 
 
 def render_body():
+    FIGN[0] = 0
     text = "\n\n".join(f.read_text(encoding="utf8") for f in sorted((SRC / "chapters").glob("*.md")))
     h = md.render(text)
 
@@ -118,7 +151,7 @@ def render_body():
         if kind == "FIG":
             return figure(a[0], a[1], a[2] if len(a) > 2 else "86%")
         if kind == "DIAGRAM":
-            return f'<div class="diagram">{(SRC / "diagram.svg").read_text(encoding="utf8")}</div>'
+            return f'<div class="diagram">{gray_svg((SRC / "diagram.svg").read_text(encoding="utf8"))}</div>'
         if kind == "SITE":
             return site_gallery()
         if kind == "CAP":
@@ -167,7 +200,32 @@ DESC = {
 }
 
 
-def toc_html(pages):
+TABLES = []
+
+
+def collect_tables(body):
+    TABLES.clear()
+    for m in re.finditer(r'<div class="tcap"><b>Table (\d+\.\d+):</b>\s*(.*?)</div>', body, flags=re.S):
+        cap = html.unescape(re.sub(r"<[^>]+>", "", m.group(2)))
+        cap = re.split(r"\. |\(", cap)[0].strip().rstrip(".")
+        TABLES.append((m.group(1), cap))
+
+
+def table_pages(raw):
+    d = fitz.open(raw)
+    texts = [re.sub(r"\s+", " ", d[i].get_text()) for i in range(len(d))]
+    res = {}
+    for n, _ in TABLES:
+        for i in range(1, len(d)):
+            if f"Table {n}:" in texts[i]:
+                res[n] = i + 1
+                break
+    d.close()
+    return res
+
+
+def toc_html(pages, tpages=None):
+    tpages = tpages or {}
     out = ['<section class="tocpage"><div class="tophead">Askmargin: RAG Document Q&amp;A Assistant &nbsp;|&nbsp; NLP project</div>',
            '<h2 class="toctitle">Contents</h2><div class="toc">']
     for lvl, tid, label in HEADS:
@@ -175,22 +233,26 @@ def toc_html(pages):
         if lvl == 1:
             num = re.match(r"Chapter (\d+)", label).group(1)
             name = re.sub(r"^Chapter \d+: ", "", label)
-            out.append(f'<div class="chap"><div class="l c1"><span class="t"><span class="cn">{num}</span>{html.escape(name)}</span><span class="d"></span><span class="pn">{pg}</span></div>'
-                       f'<div class="cdesc">{html.escape(DESC[num])}</div>')
+            out.append(f'<div class="chap"><div class="l c1"><span class="t"><span class="cn">{num}</span>{html.escape(name)}</span><span class="d"></span><span class="pn">{pg}</span></div>')
         else:
             out.append(f'<div class="l c2"><span class="t">{html.escape(label)}</span><span class="d"></span><span>{pg}</span></div>')
         nxt = HEADS[HEADS.index((lvl, tid, label)) + 1] if HEADS.index((lvl, tid, label)) + 1 < len(HEADS) else None
         if nxt is None or nxt[0] == 1:
             out.append("</div>")
+    if TABLES:
+        out.append('<div class="lot-h">List of Tables</div>')
+        for n, cap in TABLES:
+            out.append(f'<div class="l c3"><span class="t">Table {n}: {html.escape(cap)}</span><span class="d"></span><span>{tpages.get(n, "")}</span></div>')
     out.append("</div></section>")
     return "".join(out)
 
 
-def build_pdf(pages):
+def build_pdf(pages, tpages=None):
     body = collect_heads(render_body())
+    collect_tables(body)
     css = (SRC / "report.css").read_text(encoding="utf8")
     doc = (f"<!doctype html><html><head><meta charset='utf-8'><title>Askmargin NLP Project Report</title>"
-           f"<style>{css}</style></head><body>{toc_html(pages)}{body}</body></html>")
+           f"<style>{css}</style></head><body>{toc_html(pages, tpages)}{body}</body></html>")
     (DIST / "report.html").write_text(doc, encoding="utf8")
     raw = DIST / "_raw.pdf"
     with sync_playwright() as p:
@@ -213,7 +275,7 @@ def find_pages(raw):
         if lvl == 2 and mm and int(mm.group(1)) in chap:
             start = chap[int(mm.group(1))]
         for i in range(start, len(d)):
-            if needle in texts[i]:
+            if needle.lower() in texts[i].lower():
                 res[tid] = i + 1
                 start = i
                 if lvl == 1 and mm: chap[int(mm.group(1))] = i
@@ -241,19 +303,37 @@ def stamp(raw):
     return n
 
 
+def check_gray(pdf):
+    """Return the number of non-gray pixels over all pages (must be 0)."""
+    d = fitz.open(pdf)
+    bad = 0
+    for page in d:
+        pm = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
+        a = np.frombuffer(pm.samples, dtype=np.uint8).reshape(pm.height, pm.width, pm.n)
+        bad += int(((a[..., 0] != a[..., 1]) | (a[..., 1] != a[..., 2])).sum())
+    d.close()
+    return bad
+
+
 if __name__ == "__main__":
-    pages = find_pages(build_pdf({}))
-    for _ in range(2):
-        raw = build_pdf(pages)
-        new = find_pages(raw)
-        if new == pages:
+    pages, tpages = {}, {}
+    raw = build_pdf(pages, tpages)
+    for _ in range(3):
+        new, tnew = find_pages(raw), table_pages(raw)
+        if new == pages and tnew == tpages:
             break
-        pages = new
+        pages, tpages = new, tnew
+        raw = build_pdf(pages, tpages)
     n = stamp(raw)
     miss = [l for _, t, l in HEADS if t not in pages]
     print(f"{FINAL}  pages={n}")
     if miss:
         print("WARNING: headings not located:", miss)
+    bad = check_gray(FINAL)
+    print("non-gray pixels:", bad)
     if n > 19:
         print("ERROR: more than 19 pages!")
         sys.exit(2)
+    if bad:
+        print("ERROR: the PDF contains colour")
+        sys.exit(3)

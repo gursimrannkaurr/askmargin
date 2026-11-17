@@ -4,7 +4,7 @@
 
 The task needs "private documents" that anyone can obtain, so that every result can be reproduced. We use **four open-access research papers from arXiv**, downloaded automatically by the notebook (Step 1). All four are about NLP, which allowed us to write questions whose answers can be checked by reading the paper.
 
-{{CAP:tcap|<b>Table 2.1</b> The corpus, as counted by the notebook after cleaning (pages with fewer than 80 characters are skipped).}}
+{{CAP:tcap|<b>Table 2.1:</b> The corpus, as counted by the notebook after cleaning (pages with fewer than 80 characters are skipped).}}
 
 | Key | Paper | arXiv id | Pages used | Words |
 |---|---|---|---|---|
@@ -31,7 +31,7 @@ The questions were written by hand (file `eval_questions.json`). There are **25 
 
 A chunk is a *hit* only if it is from the right paper and contains the answer string after both are lower-cased and stripped of punctuation. The notebook checks that with both chunking strategies the answer string is present in at least one chunk for **25 of 25** questions, so a perfect retriever could score 100% and no question is impossible because of chunking. The five out-of-document questions (capital of France, football world cup 2022, a cake recipe, the price of a Tesla Model 3, the prime minister of India) test the refusal rule.
 
-{{CAP:tcap|<b>Table 2.2</b> The complete evaluation set. "Expected" is the key phrase checked in the generated answer.}}
+{{CAP:tcap|<b>Table 2.2:</b> The complete evaluation set. "Expected" is the key phrase checked in the generated answer.}}
 
 | Id | Paper | Question | Expected |
 |---|---|---|---|

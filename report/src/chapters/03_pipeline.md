@@ -5,9 +5,9 @@
 The pipeline has two halves. In the **indexing half** (run once per document set) the PDFs are read, cleaned, cut into chunks and turned into vectors that are stored. In the **question-answering half** (run for every question) the question is turned into a vector with the same model, the closest chunks are retrieved, a refusal check decides whether the document can answer at all, and finally a language model writes a short answer from the retrieved text. An offline evaluation step measures how good each choice is.
 
 {{DIAGRAM:x}}
-{{CAP:fcap|<b>Figure 3.1</b> The Askmargin pipeline. Steps 1-5 build the index; steps 6-10 run per question; step 11 measures quality.}}
+{{CAP:fcap|<b>Figure 3.1:</b> The Askmargin pipeline. Steps 1-5 build the index; steps 6-10 run per question; step 11 measures quality.}}
 
-{{CAP:tcap|<b>Table 3.1</b> Stage-to-technique map of the notebook.}}
+{{CAP:tcap|<b>Table 3.1:</b> Stage-to-technique map of the notebook.}}
 
 | Step | Stage | Technique | Notebook step |
 |---|---|---|---|

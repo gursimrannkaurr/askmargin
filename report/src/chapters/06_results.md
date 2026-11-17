@@ -2,7 +2,7 @@
 
 ## 6.1 Retrieval results
 
-{{CAP:tcap|<b>Table 6.1</b> Retrieval quality on the 25 answerable questions (from retrieval_results.csv). Best value per column in bold.}}
+{{CAP:tcap|<b>Table 6.1:</b> Retrieval quality on the 25 answerable questions (from retrieval_results.csv). Best value per column in bold.}}
 
 | Chunking | Method | Recall@1 | Recall@3 | Recall@5 | MRR |
 |---|---|---|---|---|---|
@@ -17,7 +17,7 @@
 
 The best single configuration is the **hybrid retriever on sentence-aware chunks**: Recall@1 0.52, Recall@3 0.80, Recall@5 0.88 and MRR 0.665. Three honest observations follow. (1) **Sentence-aware chunking is not clearly better than fixed windows.** BM25 on fixed chunks reaches Recall@3 of 0.80 while BM25 on sentence chunks reaches 0.68, and TF-IDF is also higher on fixed chunks; sentence chunks win only with the hybrid retriever and for Recall@5 with dense retrieval. With 25 questions one question equals 0.04, so most gaps between rows are within noise. (2) **Dense retrieval alone was not better than keyword search**: Recall@3 is 0.60 against 0.72 to 0.80 for TF-IDF or BM25 on fixed chunks. A likely reason is that many questions contain very specific tokens (numbers, names such as "FAISS") that keyword methods match exactly. (3) The **hybrid** combines both signals and is the most robust choice on sentence chunks.
 
-{{CAP:tcap|<b>Table 6.2</b> Chunk-size ablation: dense retrieval, sentence-aware chunking (from chunk_size_ablation.csv).}}
+{{CAP:tcap|<b>Table 6.2:</b> Chunk-size ablation: dense retrieval, sentence-aware chunking (from chunk_size_ablation.csv).}}
 
 | Target size (chars) | Chunks | Recall@1 | Recall@3 | Recall@5 | MRR |
 |---|---|---|---|---|---|
@@ -32,7 +32,7 @@ The largest chunks (1200 characters) are worst. The smallest size (250 character
 
 The best cosine score of the 25 answerable questions has mean 0.618 (minimum 0.459); for the 5 out-of-document questions the mean is 0.195 (maximum 0.237). The two groups do not overlap, and the chosen threshold of **0.24** gives an accept/refuse accuracy of **100%**: all 5 out-of-document questions were refused and none of the 25 answerable ones was wrongly refused.
 
-{{CAP:tcap|<b>Table 6.3</b> End-to-end results (generator: dense retrieval, top-3 chunks, sentence-500, FLAN-T5-base).}}
+{{CAP:tcap|<b>Table 6.3:</b> End-to-end results (generator: dense retrieval, top-3 chunks, sentence-500, FLAN-T5-base).}}
 
 | Metric | Result |
 |---|---|
