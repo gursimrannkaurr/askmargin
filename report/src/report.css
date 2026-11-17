@@ -1,5 +1,5 @@
 /* Plain black-and-white academic style. Grayscale only. */
-@page { size: A4; margin: 17mm 17mm 20mm 17mm; }
+@page { size: A4; margin: 15mm 16mm 17mm 16mm; }
 :root { --rule: #bdbdbd; }
 html { font-family: "Times New Roman", Times, serif; font-size: 10.7pt; color: #000; }
 body { margin: 0; line-height: 1.33; background: #fff; }
@@ -31,7 +31,7 @@ figure img { max-width: 100%; border: .6pt solid #000; }
 .diagram svg { width: 100%; height: auto; }
 
 /* contents page */
-.tocpage { height: 254mm; display: flex; flex-direction: column; break-after: page; }
+.tocpage { height: 258mm; display: flex; flex-direction: column; break-after: page; }
 .tophead { text-align: center; font-size: 11pt; font-style: italic; border-bottom: .5pt solid #000; padding-bottom: 5pt; }
 .toctitle { font-size: 26pt; text-align: center; margin: 12pt 0 8pt; text-transform: uppercase; letter-spacing: .08em; }
 .toc { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
@@ -73,3 +73,11 @@ figure img { max-width: 100%; border: .6pt solid #000; }
 .ph-shot { border: 1pt dashed #666; height: 120pt; display: flex; align-items: center; justify-content: center; font-family: Consolas, monospace; font-size: 8.5pt; text-align: center; padding: 6pt; }
 .refs li { font-size: 9.6pt; margin: 0 0 1pt; line-height: 1.28; }
 .refs { margin-bottom: 0; }
+figure.vs { margin: 3pt 0 7pt; break-inside: avoid; }
+figure.vs img { width: 100%; display: block; border: .6pt solid #000; max-height: none; }
+figure.vs .fcap { margin: 3pt 0 0; }
+.site { align-items: start; }
+.site figure.web img, .site + .site figure.web img { width: 100%; height: auto; object-fit: initial; border: .6pt solid #000; }
+.site { grid-template-columns: repeat(3, 1fr); gap: 6pt; }
+.site .fcap { font-size: 9pt; }
+.expl { break-after: auto; }

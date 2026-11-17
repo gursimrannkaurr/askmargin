@@ -7,21 +7,6 @@ The pipeline has two halves. In the **indexing half** (run once per document set
 {{DIAGRAM:x}}
 {{CAP:fcap|<b>Figure 3.1:</b> The Askmargin pipeline. Steps 1-5 build the index; steps 6-10 run per question; step 11 measures quality.}}
 
-{{CAP:tcap|<b>Table 3.1:</b> Stage-to-technique map of the notebook.}}
-
-| Step | Stage | Technique | Notebook step |
-|---|---|---|---|
-| 1-2 | Extraction and cleaning | PyMuPDF text extraction, Unicode NFKC, regex clean-up | Step 2 |
-| 2b | Text preprocessing for lexical search | Lower-casing, regex tokenisation, stop-word removal, WordNet lemmatisation | Step 3 |
-| 3 | Chunking | Fixed window with overlap vs sentence-aware packing | Step 4 |
-| 4 | Vectorisation | TF-IDF, BM25, dense MiniLM embeddings | Step 6 |
-| 5 | Vector store | NumPy matrix and FAISS `IndexFlatIP`, cosine similarity | Step 7 |
-| 8 | Retrieval | Top-k by score; hybrid fusion (RRF) | Steps 6, 8 |
-| 9 | Refusal threshold | Cut-off on best cosine score | Step 9 |
-| 10 | Generation | Prompt template with context, FLAN-T5-base | Step 10 |
-| 11 | Evaluation | Recall@k, MRR, answer / citation / faithfulness / refusal | Steps 8, 11 |
-
-
 ## 3.2 Text extraction and cleaning
 
 PDFs do not store paragraphs; they store characters at positions on a page. **PyMuPDF** (`fitz`) reads the characters of each page and returns them as a string. We process one page at a time and keep the page number, because it becomes the citation later. The raw text has typical problems, which `clean()` fixes: (a) ligatures such as the single character "ﬁ" are converted to "fi" with Unicode **NFKC normalisation**; (b) words split by a hyphen at the end of a line ("repre-\nsentation") are re-joined with a regular expression; (c) line breaks and repeated spaces become single spaces. Pages with fewer than 80 characters (blank or figure-only pages) are skipped.

@@ -29,7 +29,6 @@ The same pipeline (split documents, search them by meaning, answer from the best
 | Legal | "What is the notice period in clause 14 of this agreement?" | Lawyers need the exact clause and page, not a summary from memory. |
 | Medical | "What dose adjustment does this guideline recommend for kidney patients?" | Guidelines change; the answer must cite the approved document and refuse when it is not covered. |
 | Education | "Explain the difference between BERT and Sentence-BERT from my notes." | A study assistant that answers from the student's own material and tells them which page to re-read. |
-| Research | "Which optimiser did the paper use?" | Quick lookup inside long papers, as demonstrated by the corpus of this project. |
 
 In legal and medical settings a **refusal** is as important as a correct answer. A system that answers "I could not find this in the documents" when the question is out of scope is safer than one that always answers. This is why refusal is a first-class feature of Askmargin and is evaluated separately.
 

@@ -1,78 +1,86 @@
 # Chapter 4 | Python Code with Explanations
 
-The complete notebook <code>askmargin_rag.ipynb</code> is reproduced below cell by cell with the code exactly as it was run. Each cell is preceded by an explanation of what it does. The label In [n] is the execution counter of the notebook, so every block can be matched with its output in Chapter 5.
+The complete notebook `askmargin_rag.ipynb` is shown below as VS Code screenshots, cell by cell, exactly as it was run. The label [n] is the execution counter of the notebook, so each cell can be matched with its output in Chapter 5.
 
 ## 4.1 Setup, data and cleaning
 
-<div class="expl"><b>Optional install cell.</b> On Google Colab, remove the <code>#</code> signs and run this line once to install the libraries (PyMuPDF, Sentence-Transformers, FAISS, rank-bm25, NLTK, Transformers). On a local machine they are installed once with pip.</div>
+Optional install cell for Google Colab (remove the # signs and run once). **Step 0, setup.** Imports the libraries, downloads the NLTK resources (sentence tokenizer, stop-words, WordNet), fixes the random seed to 42 and creates the data and figures folders.
 
-{{CODE:1|Optional install cell}}
+{{SHOT:1,3}}
 
-<div class="expl"><b>Step 0: setup and configuration.</b> Imports every library, downloads the four NLTK resources (sentence tokenizer, stop-word list, WordNet), fixes the random seed to 42 so that runs are repeatable, and creates the <code>data</code> and <code>figures</code> folders. All later cells reuse these names.</div>
+**Step 1, dataset.** A dictionary maps each key to a paper title and arXiv address; the loop downloads every PDF once and prints its size.
 
-{{CODE:3|Step 0: setup and configuration}}
+{{SHOT:5}}
 
-<div class="expl"><b>Step 1: dataset.</b> A dictionary maps a short key to a paper title and its arXiv PDF address. The loop downloads each PDF once (skipped if it already exists) and prints its size. These four open-access papers are the document collection.</div>
+**Step 2, ingest and clean.** `clean()` applies NFKC normalisation, re-joins hyphenated line breaks and collapses whitespace; `load_pdf()` stores the document key, page number and text of every page (the page number later becomes the citation).
 
-{{CODE:5|Step 1: dataset}}
-
-<div class="expl"><b>Step 2: ingest and clean.</b> <code>clean()</code> applies NFKC normalisation (so the ligature in the word classification becomes plain letters), re-joins words that were hyphenated at a line end, and collapses whitespace. <code>load_pdf()</code> opens a PDF, reads each page, cleans it and stores a record with the document key, the page number and the text. The page number is kept because it becomes the citation. All pages go into a pandas DataFrame and a per-paper summary is displayed.</div>
-
-{{CODE:7|Step 2: ingest and clean}}
+{{SHOT:7}}
 
 ## 4.2 Tokens and chunks
 
-<div class="expl"><b>Step 3: tokenise, remove stop-words, lemmatise.</b> <code>tokenize()</code> lower-cases the text, extracts alphanumeric tokens with a regular expression, removes NLTK stop-words and one-letter tokens, and lemmatises the rest. The demo sentence shows the effect ("layers" becomes "layer"). This function feeds TF-IDF and BM25 only; the dense model reads raw text.</div>
+**Step 3, preprocessing.** `tokenize()` lower-cases, extracts alphanumeric tokens with a regular expression, removes stop-words and one-letter tokens and lemmatises; it feeds TF-IDF and BM25 only.
 
-{{CODE:9|Step 3: tokenise, remove stop-words, lemmatise}}
+{{SHOT:9}}
 
-<div class="expl"><b>Step 4: chunking.</b> <code>chunk_fixed()</code> slides a 500-character window with 100 characters of overlap. <code>chunk_sentence()</code> splits a page into sentences, packs them until 500 characters would be exceeded, and starts the next chunk with the last sentence of the previous one so that context is not lost. Both keep the page number and never cross a page. The cell builds both versions, prints size statistics and shows an example chunk.</div>
+**Step 4, chunking.** `chunk_fixed()` slides a 500-character window with 100 characters overlap; `chunk_sentence()` packs whole sentences up to 500 characters and repeats the last sentence at the start of the next chunk. Both keep the page number.
 
-{{CODE:11|Step 4: chunking}}
+{{SHOT:11@0-23}}
+
+
+
+{{SHOT:11@23-30}}
 
 ## 4.3 Evaluation set and vector representations
 
-<div class="expl"><b>Step 5: evaluation set and metric functions.</b> Loads the 30 questions from JSON and splits them into answerable and out-of-document groups. <code>key()</code> normalises text for matching, <code>is_hit()</code> defines a correct chunk, and <code>evaluate()</code> takes any ranking function and returns Recall@1, 3, 5 and MRR. Because every retriever is plugged into the same function, the comparison is fair. The last loop reports how many questions are answerable at all with each chunking (the upper bound for any retriever).</div>
+**Step 5, evaluation set.** Loads the 30 questions; `is_hit()` defines a correct chunk and `evaluate()` returns Recall@1, 3, 5 and MRR for any ranking function, so every retriever is compared fairly.
 
-{{CODE:13|Step 5: evaluation set and metric functions}}
+{{SHOT:13@0-22}}
 
-<div class="expl"><b>Step 6: three vector representations in one class.</b> The <code>Index</code> class builds, for one list of chunks: a TF-IDF matrix (fed with our own tokens), a BM25 index and the dense MiniLM embedding matrix (unit length, 384 columns). It offers four ranking methods: <code>rank_tfidf</code>, <code>rank_bm25</code>, <code>rank_dense</code> and <code>rank_hybrid</code>, which fuses the BM25 and dense rankings with Reciprocal Rank Fusion. One index is built for each chunking strategy.</div>
+**Step 6, vectors.** The `Index` class builds a TF-IDF matrix, a BM25 index and the 384-dimensional MiniLM embeddings, and offers four rankers: TF-IDF, BM25, dense and a hybrid using Reciprocal Rank Fusion.
 
-{{CODE:15|Step 6: three vector representations in one class}}
+{{SHOT:13@22-26,15@0-9}}
 
-<div class="expl"><b>Step 7: NumPy vs FAISS.</b> Builds a FAISS inner-product index from the embedding matrix, runs the same question through FAISS and through NumPy, asserts that the top-3 ids agree, and prints the three retrieved chunks with their cosine scores and page numbers. This proves that the matrix product and the library do the same exact search.</div>
 
-{{CODE:17|Step 7: NumPy vs FAISS}}
+
+{{SHOT:15@9-25}}
+
+
+
+{{SHOT:15@25-46}}
+
+**Step 7, vector store.** Builds a FAISS inner-product index, asserts that its top-3 equals the NumPy cosine top-3 and prints the retrieved chunks with page numbers.
+
+{{SHOT:17}}
 
 ## 4.4 Retrieval evaluation and ablation
 
-<div class="expl"><b>Step 8: retrieval evaluation.</b> Evaluates all four methods on both chunkings (8 rows), saves the table to CSV and draws the Recall@3 bar chart.</div>
+**Step 8, retrieval evaluation.** Evaluates all four methods on both chunkings, saves a CSV and draws the Recall@3 chart. **Ablation.** Repeats dense retrieval with chunk sizes 250, 500, 800 and 1200 characters.
 
-{{CODE:19|Step 8: retrieval evaluation}}
+{{SHOT:19}}
 
-<div class="expl"><b>Ablation: chunk size.</b> Repeats dense retrieval with sentence-aware chunks of target size 250, 500, 800 and 1200 characters and plots Recall@1 and Recall@3 against size.</div>
 
-{{CODE:21|Ablation: chunk size}}
+
+{{SHOT:21}}
 
 ## 4.5 Refusal, generation and answer evaluation
 
-<div class="expl"><b>Step 9: choosing the refusal threshold.</b> Computes the best cosine score for every question, then scans thresholds from 0.10 to 0.70 and keeps the value with the highest accept/refuse accuracy. Draws a histogram of the two groups with the threshold line.</div>
+**Step 9, refusal threshold.** Computes the best cosine of every question and scans thresholds from 0.10 to 0.70 for the best accept/refuse accuracy.
 
-{{CODE:23|Step 9: choosing the refusal threshold}}
+{{SHOT:23}}
 
-<div class="expl"><b>Step 10: generation with FLAN-T5.</b> Loads FLAN-T5-base, defines the prompt template and the function <code>ask()</code>: score all chunks, take the top 3, refuse if the best score is below the threshold, otherwise build the prompt, generate with beam search and attach the citations from the chunk metadata (not from the model). Three demo questions follow, one of them out of scope.</div>
+**Step 10, generation.** Loads FLAN-T5-base and defines the prompt and `ask()`: retrieve the top 3 chunks, refuse below the threshold, otherwise generate with beam search and attach the citations from chunk metadata.
 
-{{CODE:25|Step 10: generation with FLAN-T5}}
+{{SHOT:25@0-14}}
 
-<div class="expl"><b>Step 11: evaluating full answers.</b> Runs <code>ask()</code> on all 25 answerable questions and records whether the answer contains the expected phrase, whether a cited page really contains the answer, the faithfulness score and whether the system wrongly refused. Then it counts correct refusals on the 5 out-of-document questions and saves a CSV.</div>
 
-{{CODE:27|Step 11: evaluating full answers}}
 
-<div class="expl"><b>Step 12: error analysis.</b> Prints, for each wrongly answered question, the expected answer, the model's answer and whether the evidence was in the top-2 chunks. This separates retrieval errors from generation errors.</div>
+{{SHOT:25@14-33}}
 
-{{CODE:29|Step 12: error analysis}}
+**Step 11, answer evaluation.** Runs `ask()` on the 25 answerable questions and records correctness, citation, faithfulness and wrong refusals, then counts refusals on the 5 out-of-document questions. **Step 12, error analysis.** Prints expected answer, generated answer and evidence status for each wrong answer.
 
-<div class="expl"><b>Step 13: export for the web demo.</b> Saves the sentence-aware chunks as JSON and their embeddings as 16-bit floats so the website can load the sample papers without recomputing anything.</div>
+{{SHOT:27}}
 
-{{CODE:31|Step 13: export for the web demo}}
+**Step 13, export.** Saves the chunks (JSON) and embeddings (16-bit floats) for the website.
+
+{{SHOT:29,31}}
 

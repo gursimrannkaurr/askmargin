@@ -54,7 +54,6 @@ Citation accuracy (52%) is lower than answer accuracy (68%): four questions (11,
 * **Threshold tuned on the test questions.** The value 0.24 was chosen with the same 30 questions it is evaluated on. The gap between the groups is wide (0.237 against 0.459), but the out-of-document questions are completely off-topic. Questions that are close to the document's topic yet unanswered by it are harder and were not tested.
 * **Crude metrics.** A hit needs the exact answer string, so differently worded evidence is a miss; faithfulness is only word overlap.
 * **Small generator.** FLAN-T5-base (250 M parameters) can pick a wrong number from the context.
-* **One corpus.** Four English NLP papers; tables, equations and two-column layouts can still hurt extraction.
 
 ## 6.5 Future work
 

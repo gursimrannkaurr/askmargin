@@ -1,39 +1,27 @@
 # Chapter 5 | Screenshots of Execution and Output
 
-This chapter shows the real output of every cell of the executed notebook (it was run top to bottom on a CPU with no errors, and the outputs below are copied from it, not retyped). Each panel is titled with the step it belongs to and shows the notebook cell it came from.
+This chapter shows the real outputs of the executed notebook (run top to bottom on a CPU with no errors), captured as VS Code notebook output cells, followed by screenshots of the live web demo. Nothing below is retyped: the text and tables are copied from the notebook run and the charts are the notebook's own figures.
 
 ## 5.1 Data loading, cleaning and preprocessing
 
-{{OUT:7|Step 2: pages and words per paper after extraction and cleaning}}
-
-{{OUT:9|Step 3: tokenisation, stop-word removal and lemmatisation}}
-
-{{OUT:11|Step 4: chunk statistics for the two strategies}}
+{{OUTS:7,9,11|Outputs of Steps 2, 3 and 4: pages and words per paper, tokenisation example, chunk statistics for the two strategies.}}
 
 ## 5.2 Vectors, vector store and retrieval
 
-{{OUT:15|Step 6: building TF-IDF, BM25 and dense indexes}}
+{{OUTS:15,17:7|Outputs of Steps 6 and 7: index sizes (device cpu, 384-dimensional embeddings) and identical FAISS and NumPy search results with the retrieved chunks.}}
 
-{{OUT:17|Step 7: FAISS and NumPy return identical results}}
-
-{{OUT:19|Step 8: retrieval metrics for 4 methods x 2 chunkings, and the Recall@3 chart}}
-
-{{OUT:21|Ablation: chunk size, and the recall curves}}
+{{OUTS:19|Output of Step 8: retrieval metrics for four methods on two chunkings, and the Recall@3 chart.}}
 
 ## 5.3 Refusal, generation and answer evaluation
 
-{{OUT:23|Step 9: refusal threshold and score histogram}}
+{{OUTS:21,23|Outputs of the chunk-size ablation (table and Recall curves) and of Step 9 (refusal threshold and score histogram).}}
 
-{{OUT:25|Step 10: three demo questions through the full pipeline}}
+{{OUTS:25,27|Outputs of Steps 10 and 11: three demo questions and the evaluation of the generated answers (first 12 rows).}}
 
-{{OUT:27|Step 11: evaluation of the generated answers (first 12 rows shown)}}
-
-{{OUT:29|Step 12: error analysis printout}}
-
-{{OUT:31|Step 13: export for the web demo}}
+{{OUTS:29:14,31|Outputs of Steps 12 and 13: error analysis (first failures shown) and the export for the web demo.}}
 
 ## 5.4 Web demo
 
-The same retrieval idea runs in the browser at **askmargin.vercel.app**. The site loads the four sample papers from the files exported in Step 13 (717 chunks as JSON and their embeddings as 16-bit numbers), embeds the user's question with the same `all-MiniLM-L6-v2` model (in a Web Worker), ranks the chunks by cosine similarity and applies the same 0.24 refusal threshold. A user can also drop in their own PDF, which is processed on their device. One difference from the notebook: the website answers in an **extractive** way, returning the best-matching sentences with their page numbers and cosine scores, and does not run FLAN-T5; the generated answers of this report come from the notebook only. The "under the hood" panel shows each stage (index, query vector, cosine search, answer).
+The same retrieval idea runs in the browser at **askmargin.vercel.app**. The site loads the four sample papers from the files exported in Step 13 (717 chunks and their embeddings), embeds the user's question with the same `all-MiniLM-L6-v2` model in a Web Worker, ranks chunks by cosine similarity and applies the same 0.24 refusal threshold; users can also drop in their own PDF, which stays on their device. Unlike the notebook, the website answers **extractively** (it returns the best-matching sentences with page numbers and scores and does not run FLAN-T5). The screenshots below are unedited captures of the site.
 
 {{SITE:x}}
